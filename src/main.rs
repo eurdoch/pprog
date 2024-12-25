@@ -4,6 +4,15 @@ mod chat;
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
 use crossterm::{event::{self, Event, KeyCode}, terminal};
+use inference::query_anthropic;
+
+struct TerminalGuard;
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = terminal::disable_raw_mode();
+    }
+}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -21,6 +30,43 @@ enum Commands {
     Chat,
 }
 
+async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
+    terminal::enable_raw_mode()?;
+    let _guard = TerminalGuard;  // Will disable raw mode when dropped
+    
+    let mut chat = ChatUI::new();
+    chat.render()?;
+
+    loop {
+        if let Event::Key(key_event) = event::read()? {
+            match key_event.code {
+                KeyCode::Esc => {
+                    chat.cleanup()?;
+                    break;
+                }
+                KeyCode::Enter => {
+                    if !chat.input_buffer.is_empty() {
+                        let message = std::mem::take(&mut chat.input_buffer);
+                        chat.add_message(&message, true);
+                        let response: inference::AnthropicResponse = query_anthropic(&message, None).await?;
+                        chat.add_message(&response.content[0].text, false);
+                    }
+                }
+                KeyCode::Backspace => {
+                    chat.input_buffer.pop();
+                }
+                KeyCode::Char(c) => {
+                    chat.input_buffer.push(c);
+                }
+                _ => {}
+            }
+            chat.render()?;
+        }
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -31,37 +77,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Perform initialization logic here
         }
         Some(Commands::Chat) => {
-            terminal::enable_raw_mode()?;
-            let mut chat = ChatUI::new();
-            
-            chat.add_message("Welcome to Chat! Press Esc to exit.".to_string(), false);
-            chat.render()?;
-
-            loop {
-                if let Event::Key(key_event) = event::read()? {
-                    match key_event.code {
-                        KeyCode::Esc => break,
-                        KeyCode::Enter => {
-                            if !chat.input_buffer.is_empty() {
-                                let message = std::mem::take(&mut chat.input_buffer);
-                                chat.add_message(message, true);
-                                // Here you would typically send the message to your chat backend
-                                chat.add_message("I received your message".to_string(), false);
-                            }
-                        }
-                        KeyCode::Backspace => {
-                            chat.input_buffer.pop();
-                        }
-                        KeyCode::Char(c) => {
-                            chat.input_buffer.push(c);
-                        }
-                        _ => {}
-                    }
-                    chat.render()?;
-                }
+            if let Err(e) = run_chat().await {
+                // Ensure we clean up even on error
+                terminal::disable_raw_mode()?;
+                return Err(e);
             }
-
-            terminal::disable_raw_mode()?;
         }
         None => {
             println!("No subcommand provided");
@@ -70,4 +90,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

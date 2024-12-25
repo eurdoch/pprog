@@ -832,6 +832,7 @@ dependencies = [
  "clap",
  "crossterm",
  "reqwest",
+ "scopeguard",
  "serde",
  "serde_json",
  "tokio",
