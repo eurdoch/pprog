@@ -6,8 +6,7 @@ mod tooler;
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
 use crossterm::{event::{self, Event, KeyCode}, terminal};
-use tree::GitTree;
-use inference::{Content, Inference};
+use inference::{ContentItem, Inference, Message, Role, TextContent};
 
 struct TerminalGuard;
 
@@ -38,7 +37,6 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = TerminalGuard;  
     
     let mut chat = ChatUI::new();
-    let inference = Inference::new();
     chat.render()?;
 
     loop {
@@ -50,55 +48,20 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 KeyCode::Enter => {
                     if !chat.input_buffer.is_empty() {
-                        let tree_string = GitTree::get_tree()?;
-                        let system_message = format!(
-                            r#"
-                            You are a coding assistant working on a project.
-                            
-                            File tree structure:
-                            {}
-
-                            The user will give you instructions on how to change the project code.
-                            "#,
-                            &tree_string,
-                        );
-                        let message = std::mem::take(&mut chat.input_buffer);
-                        chat.add_message(&message, true);
-                        let response = inference.query_anthropic(&message, Some(&system_message)).await?;
-                        for content in &response.content {
-                            match content {
-                                Content::Text(text_content) => {
-                                    chat.add_message(&text_content.text, false);
-                                }
-                                Content::ToolUse(tool_use_content) => {
-                                    if tool_use_content.name == "write_file" {
-                                        match GitTree::get_git_root() {
-                                            Ok(git_root_path) => {
-                                                let path = tool_use_content.input.get("path")
-                                                    .and_then(|v| v.as_str())
-                                                    .ok_or_else(|| anyhow::anyhow!("Missing or invalid path in tool input"))?;
-                                                let full_path = git_root_path.join(path);
-                                                let content = tool_use_content.input.get("content")
-                                                    .and_then(|v| v.as_str())
-                                                    .ok_or_else(|| anyhow::anyhow!("Missing or invalid path in tool input"))?;
-
-                                                chat.add_message(
-                                                    &format!("Writing to file {:?}...", full_path),
-                                                    false
-                                                );
-                                            }
-                                            Err(e) => {
-                                                chat.add_message(&format!("Error: {}", e), false);
-                                            }
-                                        }
-                                    }
-
-                                    chat.add_message(&format!("{:#?}", tool_use_content), false);
-                                }
-                            }
-                        }
+                        let user_input = std::mem::take(&mut chat.input_buffer);
+                        let new_message = Message {
+                            role: Role::User,
+                            content: vec!(ContentItem::Text(TextContent {
+                                content_type: "text".to_string(),
+                                text: user_input,
+                            })),
+                        };
+                        chat.add_message(new_message).await?;
+                        
+                       
                     }
                 }
+
                 KeyCode::Backspace => {
                     chat.input_buffer.pop();
                 }
@@ -137,3 +100,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+

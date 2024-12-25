@@ -11,34 +11,71 @@ pub struct AnthropicResponse {
     pub message_type: String,
     pub role: String,
     pub model: String,
-    pub content: Vec<Content>,
+    pub content: Vec<ContentItem>,
     pub stop_reason: String,
     pub stop_sequence: Option<String>,
     pub usage: Usage,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(tag = "type")]
-pub enum Content {
+pub enum ContentItem {
     #[serde(rename = "text")]
     Text(TextContent),
     #[serde(rename = "tool_use")]
     ToolUse(ToolUseContent),
+    #[serde(rename = "tool_result")]
+    ToolResult(ToolResultContent),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct Message {
+    pub role: Role,
+    pub content: Vec<ContentItem>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum Role {
+    User,
+    Assistant,
+}
+
+impl PartialEq<&str> for Role {
+    fn eq(&self, other: &&str) -> bool {
+        match self {
+            Role::User => other.eq_ignore_ascii_case(&"user"),
+            Role::Assistant => other.eq_ignore_ascii_case(&"assistant"),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
 pub struct TextContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
     pub text: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
 pub struct ToolUseContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
     pub id: String,
     pub name: String,
     pub input: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+pub struct ToolResultContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
+    pub tool_use_id: String,
+    // TODO this will change eventually to be String | Content
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Usage {
     pub input_tokens: i32,
     pub cache_creation_input_tokens: i32,
@@ -49,7 +86,7 @@ pub struct Usage {
 #[derive(Serialize)]
 struct AnthropicRequest<'a> {
     model: &'a str,
-    messages: Vec<serde_json::Value>,
+    messages: Vec<Message>,
     max_tokens: u32,
     tools: serde_json::Value,
     system: String,
@@ -68,12 +105,8 @@ impl Inference {
         }
     }
 
-    pub async fn query_anthropic(&self, prompt: &str, system_message: Option<&str>) -> Result<AnthropicResponse, anyhow::Error> {
+    pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<AnthropicResponse, anyhow::Error> {
         let api_key = env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
-        let messages = vec![serde_json::json!({
-            "role": "user",
-            "content": prompt
-        })];
         let system = system_message.unwrap_or("").to_string();
 
         let tools = self.tooler.get_tools_json()?;
