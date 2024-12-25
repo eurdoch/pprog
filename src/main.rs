@@ -1,10 +1,12 @@
 mod inference;
 mod chat;
+mod tree;
 
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
 use crossterm::{event::{self, Event, KeyCode}, terminal};
-use inference::query_anthropic;
+use inference::{query_anthropic, AnthropicResponse};
+use tree::GitTree;
 
 struct TerminalGuard;
 
@@ -32,7 +34,7 @@ enum Commands {
 
 async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
     terminal::enable_raw_mode()?;
-    let _guard = TerminalGuard;  // Will disable raw mode when dropped
+    let _guard = TerminalGuard;  
     
     let mut chat = ChatUI::new();
     chat.render()?;
@@ -46,9 +48,21 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 KeyCode::Enter => {
                     if !chat.input_buffer.is_empty() {
+                        let tree_string = GitTree::get_tree()?;
+                        let system_message = format!(
+                            r#"
+                            You are a coding assistant working on a project.
+                            
+                            File tree structure:
+                            {}
+
+                            The user will give you instructions on how to change the project code.
+                            "#,
+                            &tree_string,
+                        );
                         let message = std::mem::take(&mut chat.input_buffer);
                         chat.add_message(&message, true);
-                        let response: inference::AnthropicResponse = query_anthropic(&message, None).await?;
+                        let response: AnthropicResponse = query_anthropic(&message, Some(&system_message)).await?;
                         chat.add_message(&response.content[0].text, false);
                     }
                 }
