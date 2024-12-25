@@ -30,9 +30,19 @@ pub struct Usage {
     pub output_tokens: i32,
 }
 
-pub async fn query_anthropic(prompt: &str) -> Result<AnthropicResponse, reqwest::Error> {
+pub async fn query_anthropic(prompt: &str, system_message: Option<&str>) -> Result<AnthropicResponse, reqwest::Error> {
     let client = Client::new();
     let api_key = env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
+    let mut messages = vec![serde_json::json!({
+        "role": "user",
+        "content": prompt
+    })];
+    if let Some(system_message) = system_message {
+        messages.insert(0, serde_json::json!({
+            "role": "system",
+            "content": system_message
+        }));
+    }
     let res = client
         .post("https://api.anthropic.com/v1/messages")
         .header("Content-Type", "application/json")
@@ -40,10 +50,7 @@ pub async fn query_anthropic(prompt: &str) -> Result<AnthropicResponse, reqwest:
         .header("anthropic-version", "2023-06-01")
         .json(&serde_json::json!({
             "model": "claude-3-5-sonnet-20241022",
-            "messages": [{
-                "role": "user",
-                "content": prompt
-            }],
+            "messages": messages,
             "max_tokens": 1024
         }))
         .send()

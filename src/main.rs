@@ -4,7 +4,6 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    /// Force the operation to proceed
     #[arg(short, long)]
     force: bool,
 
@@ -14,7 +13,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a new project
     Init,
 }
 
