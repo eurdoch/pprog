@@ -1,3 +1,4 @@
+
 mod inference;
 mod chat;
 mod tree;
@@ -6,7 +7,7 @@ mod tooler;
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
 use crossterm::{event::{self, Event, KeyCode}, terminal};
-use inference::{ContentItem, Inference, Message, Role, TextContent};
+use inference::{ContentItem, Message, Role, TextContent};
 
 struct TerminalGuard;
 
@@ -48,6 +49,10 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 KeyCode::Enter => {
                     if !chat.input_buffer.is_empty() {
+                        if chat.input_buffer == "/exit" {
+                            chat.cleanup()?;
+                            break;
+                        }
                         let user_input = std::mem::take(&mut chat.input_buffer);
                         let new_message = Message {
                             role: Role::User,
@@ -57,8 +62,6 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                             })),
                         };
                         chat.add_message(new_message).await?;
-                        
-                       
                     }
                 }
 
