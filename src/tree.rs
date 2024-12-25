@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 use std::process::Command;
+use std::path::PathBuf;
+use gix;
+use anyhow::Result;
 
 pub struct GitTree;
 
@@ -10,6 +13,18 @@ enum TreeNode {
 }
 
 impl GitTree {
+    pub fn get_git_root() -> Result<PathBuf> {
+        // Discover repository from current directory
+        let repo = gix::discover(".")?;
+        
+        // Get the working directory path and canonicalize it to get absolute path
+        let root_path = repo.work_dir()
+            .ok_or_else(|| anyhow::anyhow!("Repository has no working directory (might be bare)"))?
+            .canonicalize()?;
+        
+        Ok(root_path)
+    }
+
     pub fn get_tree() -> Result<String, std::io::Error> {
         let output = Command::new("git")
             .arg("ls-files")
@@ -44,7 +59,8 @@ impl GitTree {
             current.insert(file_name.to_string(), TreeNode::File);
         }
 
-        let mut result = String::from(".\n");
+        let mut result = String::from(".
+");
         Self::build_tree_string(&tree, "", true, &mut result);
         Ok(result)
     }
@@ -60,7 +76,8 @@ impl GitTree {
             let connector = if is_last_entry { "└── " } else { "├── " };
             let next_prefix = if is_last_entry { "    " } else { "│   " };
 
-            result.push_str(&format!("{}{}{}\n", prefix, connector, name));
+            result.push_str(&format!("{}{}{}
+", prefix, connector, name));
 
             if let TreeNode::Dir(subtree) = node {
                 Self::build_tree_string(subtree, &format!("{}{}", prefix, next_prefix), is_last_entry, result);
@@ -77,3 +94,36 @@ impl TreeNode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_get_git_root() -> Result<()> {
+        // Save current directory
+        let original_dir = env::current_dir()?;
+        
+        // Create a temporary directory structure
+        let temp_dir = tempfile::tempdir()?;
+        
+        // Initialize a git repo in the temp directory
+        let _repo = gix::init(temp_dir.path())?;
+        
+        // Change to a subdirectory to test discovery
+        let subdir = temp_dir.path().join("src").join("nested");
+        std::fs::create_dir_all(&subdir)?;
+        env::set_current_dir(&subdir)?;
+        
+        // Test finding the root
+        let root = GitTree::get_git_root()?;
+        
+        assert_eq!(root, temp_dir.path().canonicalize()?);
+        
+        // Restore original directory
+        env::set_current_dir(original_dir)?;
+        Ok(())
+    }
+}
+

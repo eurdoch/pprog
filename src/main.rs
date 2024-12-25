@@ -5,9 +5,9 @@ mod tooler;
 
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
-use crossterm::{event::{self, Event, KeyCode}, queue, terminal};
+use crossterm::{event::{self, Event, KeyCode}, terminal};
 use tree::GitTree;
-use inference::{AnthropicResponse, Content, Inference};
+use inference::{Content, Inference};
 
 struct TerminalGuard;
 
@@ -71,6 +71,10 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                                     chat.add_message(&text_content.text, false);
                                 }
                                 Content::ToolUse(tool_use_content) => {
+                                    if tool_use_content.name == "write_file" {
+                                        let git_root_path = GitTree::get_git_root();
+                                        chat.add_message(&format!("{:?}", git_root_path), false);
+                                    }
                                     chat.add_message(&format!("{:#?}", tool_use_content), false);
                                 }
                             }
