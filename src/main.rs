@@ -1,6 +1,7 @@
 mod inference;
 mod chat;
 mod tree;
+mod tooler;
 
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
