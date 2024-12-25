@@ -71,9 +71,7 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                                     chat.add_message(&text_content.text, false);
                                 }
                                 Content::ToolUse(tool_use_content) => {
-                                    println!("Tool Use: {}", tool_use_content.name);
-                                    println!("Input: {:?}", tool_use_content.input);
-                                    chat.add_message(&format!("{:?}", tool_use_content), false);
+                                    chat.add_message(&format!("{:#?}", tool_use_content), false);
                                 }
                             }
                         }
