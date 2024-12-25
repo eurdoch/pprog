@@ -12,3 +12,4 @@ clap = { version = "4.0", features = ["derive"] }
 crossterm = "0.27"
 scopeguard = "1.2"
 once_cell = "1.18"
+anyhow = "1.0.95"

@@ -5,9 +5,9 @@ mod tooler;
 
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
-use crossterm::{event::{self, Event, KeyCode}, terminal};
-use inference::{query_anthropic, AnthropicResponse};
+use crossterm::{event::{self, Event, KeyCode}, queue, terminal};
 use tree::GitTree;
+use inference::{AnthropicResponse, Content, Inference};
 
 struct TerminalGuard;
 
@@ -38,6 +38,7 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = TerminalGuard;  
     
     let mut chat = ChatUI::new();
+    let inference = Inference::new();
     chat.render()?;
 
     loop {
@@ -63,8 +64,19 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                         );
                         let message = std::mem::take(&mut chat.input_buffer);
                         chat.add_message(&message, true);
-                        let response: AnthropicResponse = query_anthropic(&message, Some(&system_message)).await?;
-                        chat.add_message(&response.content[0].text, false);
+                        let response = inference.query_anthropic(&message, Some(&system_message)).await?;
+                        for content in &response.content {
+                            match content {
+                                Content::Text(text_content) => {
+                                    chat.add_message(&text_content.text, false);
+                                }
+                                Content::ToolUse(tool_use_content) => {
+                                    println!("Tool Use: {}", tool_use_content.name);
+                                    println!("Input: {:?}", tool_use_content.input);
+                                    chat.add_message(&format!("{:?}", tool_use_content), false);
+                                }
+                            }
+                        }
                     }
                 }
                 KeyCode::Backspace => {

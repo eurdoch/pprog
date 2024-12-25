@@ -23,12 +23,12 @@ pub struct PropertySchema {
     pub description: String,
 }
 
-struct Tooler {
+pub struct Tooler {
     tools: Vec<Tool>,
 }
 
 impl Tooler {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             tools: vec![
                 Tool {
@@ -80,8 +80,7 @@ impl Tooler {
         }
     }
 
-    fn to_string(&self) -> String {
-        serde_json::to_string(&self.tools).unwrap()
+    pub fn get_tools_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::to_value(&self.tools)
     }
 }
-
