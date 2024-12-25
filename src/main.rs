@@ -72,9 +72,27 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                                 Content::ToolUse(tool_use_content) => {
                                     if tool_use_content.name == "write_file" {
-                                        let git_root_path = GitTree::get_git_root();
-                                        chat.add_message(&format!("{:?}", git_root_path), false);
+                                        match GitTree::get_git_root() {
+                                            Ok(git_root_path) => {
+                                                let path = tool_use_content.input.get("path")
+                                                    .and_then(|v| v.as_str())
+                                                    .ok_or_else(|| anyhow::anyhow!("Missing or invalid path in tool input"))?;
+                                                let full_path = git_root_path.join(path);
+                                                let content = tool_use_content.input.get("content")
+                                                    .and_then(|v| v.as_str())
+                                                    .ok_or_else(|| anyhow::anyhow!("Missing or invalid path in tool input"))?;
+
+                                                chat.add_message(
+                                                    &format!("Writing to file {:?}...", full_path),
+                                                    false
+                                                );
+                                            }
+                                            Err(e) => {
+                                                chat.add_message(&format!("Error: {}", e), false);
+                                            }
+                                        }
                                     }
+
                                     chat.add_message(&format!("{:#?}", tool_use_content), false);
                                 }
                             }
