@@ -38,42 +38,9 @@ pub enum ContentItem {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-#[serde(untagged)]
-pub enum MessageContent {
-    Text(String),
-    Items(Vec<ContentItem>),
-}
-
-// Iterator struct to hold temporary content
-pub struct MessageContentIter<'a> {
-    // We need to hold both the temporary item and the original iterator
-    temp_text_item: Option<ContentItem>,
-    items_iter: Option<std::slice::Iter<'a, ContentItem>>,
-}
-
-impl MessageContent {
-    pub fn iter(&mut self) -> impl Iterator<Item = &ContentItem> {
-        match self {
-            MessageContent::Text(text) => {
-                // Convert to Items variant
-                *self = MessageContent::Items(vec![ContentItem::Text {
-                    text: text.clone(),
-                }]);
-                
-                match self {
-                    MessageContent::Items(items) => items.iter(),
-                    _ => unreachable!(),
-                }
-            }
-            MessageContent::Items(items) => items.iter(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Message {
     pub role: Role,
-    pub content: MessageContent,
+    pub content: Vec<ContentItem>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -83,6 +50,7 @@ pub enum Role {
     Assistant,
 }
 
+// TODO possibly delete
 impl PartialEq<&str> for Role {
     fn eq(&self, other: &&str) -> bool {
         match self {

@@ -6,7 +6,7 @@ mod tooler;
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
 use crossterm::{event::{self, Event, KeyCode}, terminal};
-use inference::{Message, MessageContent, Role};
+use inference::{ContentItem, Message, Role};
 
 struct TerminalGuard;
 
@@ -55,7 +55,9 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                         let user_input = std::mem::take(&mut chat.input_buffer);
                         let new_message = Message {
                             role: Role::User,
-                            content: MessageContent::Text(user_input)
+                            content: vec![
+                                ContentItem::Text { text: user_input } 
+                            ]
                         };
                         chat.add_message(new_message).await?;
                     }

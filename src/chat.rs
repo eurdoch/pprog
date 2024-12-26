@@ -9,7 +9,7 @@ use crossterm::{
 use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
 
-use crate::{inference::{ContentItem, Inference, Message, MessageContent, Role}, tree::GitTree};
+use crate::{inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
 
 pub struct ChatUI {
     pub messages: Vec<Message>,
@@ -34,9 +34,22 @@ impl ChatUI {
         }
     }
 
+    fn extract_string_field<'a>(
+        &self,
+        input: &'a serde_json::Value,
+        field_name: &str
+    ) -> Result<&'a str, String> {
+        input.get(field_name)
+            .ok_or_else(|| format!("Missing '{}' field in tool input: {:?}", field_name, input))?
+            .as_str()
+            .ok_or_else(|| format!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
+    }
+
     pub fn add_message(&mut self, message: Message) -> Pin<Box<dyn Future<Output = Result<(), anyhow::Error>> + '_>> {
         Box::pin(async move {
             self.messages.push(message.clone());
+            self.render()?;
+
             match message.role {
                 Role::User => {
                     let tree_string = GitTree::get_tree()?;
@@ -57,44 +70,84 @@ impl ChatUI {
                             ContentItem::Text { text, .. } => {
                                 let new_message = Message {
                                     role: Role::Assistant,
-                                    content: MessageContent::Text(text.to_string())
+                                    content: vec![
+                                        ContentItem::Text { text: text.to_string() }
+                                    ]
                                 };
                                 self.add_message(new_message).await?;
                             }
                             ContentItem::ToolUse { name, input, id, .. } => {
+                                self.messages.push(Message {
+                                    role: Role::Assistant,
+                                    content: vec![
+                                        ContentItem::Text { text: format!("Tool use: {:#?}", &content_item) }
+                                    ]
+                                });
+                                self.render()?;
+
                                 match GitTree::get_git_root() {
                                     Ok(root_path) => {
                                         if name == "write_file" {
-                                            let content = input["content"].as_str().unwrap();
-                                            let path = input["path"].as_str().unwrap();
-                                            let file_path = root_path.join(path);
-                                            let result_content = match std::fs::write(&file_path, content) {
-                                                Ok(_) => format!("Successfully wrote content to file {:?}.", &file_path),
-                                                Err(e) => format!("Error writing file {:?}: {:?}.", &file_path, e),
+                                            let content = match self.extract_string_field(input, "content") {
+                                                Ok(content) => content,
+                                                Err(error_msg) => {
+                                                    self.add_message(Message {
+                                                        role: Role::Assistant,
+                                                        content: vec![
+                                                            ContentItem::Text { text: error_msg }
+                                                        ]
+                                                    }).await?;
+                                                    return Ok(());
+                                                }
                                             };
-                                            let new_message = Message {
+                                            let file_path = match self.extract_string_field(input, "path") {
+                                                Ok(content) => content,
+                                                Err(error_msg) => {
+                                                    self.add_message(Message {
+                                                        role: Role::Assistant,
+                                                        content: vec![
+                                                            ContentItem::Text { text: error_msg }
+                                                        ]
+                                                    }).await?;
+                                                    return Ok(());
+                                                }
+                                            };
+
+                                            let full_path = root_path.join(file_path);
+                                            let tool_result_message = match std::fs::write(full_path.clone(), content) {
+                                                Ok(_) => format!("Successfully wrote content to file {:?}.", full_path), 
+                                                Err(e) => format!("Error writing to file {:?}: {:?}.", full_path, e), 
+                                            };
+                                            self.messages.push(Message {
                                                 role: Role::User,
-                                                content: MessageContent::Items(vec![
+                                                content: vec![
+                                                    ContentItem::Text { text: format!("Tool result message {:#?}", tool_result_message) }
+                                                ]
+                                            });
+                                            self.add_message(Message {
+                                                role: Role::User,
+                                                content: vec![
                                                     ContentItem::ToolResult { 
                                                         tool_use_id: id.to_string(), 
-                                                        content: result_content,
+                                                        content: tool_result_message,
                                                     }
-                                                ])
-                                            };
-                                            self.add_message(new_message).await?;
-                                        }
+                                                ]
+                                            }).await?;
 
+                                        }
                                     },
+
                                     Err(e) => {
                                         self.add_message(Message {
                                             role: Role::Assistant,
-                                            content: MessageContent::Text(format!("Error getting git root: {}", e))
+                                            content: vec![
+                                                ContentItem::Text { text: format!("Error getting git root: {}", e) }
+                                            ]
                                         }).await?;
-                                        return Ok(())
+                                        return Ok(());
                                     }
                                 };
                             }
-
                             _ => {}
                         }
                     }
@@ -191,21 +244,22 @@ impl ChatUI {
             stdout.queue(Print(prefix))?;
             stdout.queue(ResetColor)?;
 
-            // Handle the content based on its type
-            match &message.content {
-                MessageContent::Text(text) => {
-                    Self::write_wrapped_text(&mut stdout, text, prefix_width, max_width)?;
-                }
-                MessageContent::Items(items) => {
-                    for (i, content) in items.iter().enumerate() {
-                        if i > 0 {
-                            stdout.queue(cursor::MoveToNextLine(1))?;
-                            stdout.queue(Print(" ".repeat(prefix_width)))?;
-                        }
-                        Self::write_content(&mut stdout, content, prefix_width, max_width)?;
+            for content_item in &message.content {
+                match content_item {
+                    ContentItem::Text { text } => {
+                        Self::write_wrapped_text(&mut stdout, &text, prefix_width, max_width)?;
+                    },
+                    ContentItem::ToolResult { tool_use_id, content } => {
+                        let result_text = format!("Tool result - {} - {}", tool_use_id, content);
+                        Self::write_wrapped_text(&mut stdout, &result_text, prefix_width, max_width)?;
+                    },
+                    ContentItem::ToolUse { id, name, .. } => {
+                        let result_text = format!("Tool use {} - {}", id, name);
+                        Self::write_wrapped_text(&mut stdout, &result_text, prefix_width, max_width)?;
                     }
                 }
             }
+
             
             stdout.queue(cursor::MoveToNextLine(1))?;
         }
