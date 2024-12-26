@@ -6,7 +6,6 @@ use crossterm::{
     style::{Color, Print, ResetColor, SetForegroundColor},
     QueueableCommand,
 };
-use log::debug;
 use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
 use crate::{inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
@@ -132,6 +131,33 @@ impl ChatUI {
                                                 ]
                                             }).await?;
 
+                                        } else if name == "read_file" {
+                                            let file_path = match self.extract_string_field(input, "path") {
+                                                Ok(content) => content,
+                                                Err(error_msg) => {
+                                                    self.add_message(Message {
+                                                        role: Role::Assistant,
+                                                        content: vec![
+                                                            ContentItem::Text { text: error_msg }
+                                                        ]
+                                                    }).await?;
+                                                    return Ok(());
+                                                }
+                                            };
+                                            let full_path = root_path.join(file_path);
+                                            let tool_result_message = match std::fs::read_to_string(full_path.clone()) {
+                                                Ok(file_content) => file_content,
+                                                Err(e) => format!("Error reading file {:?}: {:?}.", full_path, e),
+                                            };
+                                            self.add_message(Message {
+                                                role: Role::User,
+                                                content: vec![
+                                                    ContentItem::ToolResult { 
+                                                        tool_use_id: id.to_string(), 
+                                                        content: tool_result_message,
+                                                    }
+                                                ]
+                                            }).await?;
                                         }
                                     },
 
