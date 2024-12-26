@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::process::Command;
 use std::path::PathBuf;
 use gix;
-use anyhow::Result;
+use anyhow;
 
 pub struct GitTree;
 
@@ -13,7 +13,7 @@ enum TreeNode {
 }
 
 impl GitTree {
-    pub fn get_git_root() -> Result<PathBuf> {
+    pub fn get_git_root() -> anyhow::Result<PathBuf> {
         // Discover repository from current directory
         let repo = gix::discover(".")?;
         
@@ -25,16 +25,22 @@ impl GitTree {
         Ok(root_path)
     }
 
-    pub fn get_tree() -> Result<String, std::io::Error> {
-        let output = Command::new("git")
-            .arg("ls-files")
-            .output()?;
+    pub fn get_tree() -> Result<String, anyhow::Error> {
+        let root = Self::get_git_root()?;
+        let mut cmd = Command::new("git");
+        let cmd = cmd.arg("ls-files")
+            .arg("-o")
+            .arg("--exclude-standard")
+            .arg("-c")
+            .current_dir(&root);
+
+        let output = cmd.output()?;
 
         if !output.status.success() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 String::from_utf8_lossy(&output.stderr).to_string()
-            ));
+            ).into());
         }
 
         let files: Vec<String> = String::from_utf8_lossy(&output.stdout)
@@ -59,8 +65,7 @@ impl GitTree {
             current.insert(file_name.to_string(), TreeNode::File);
         }
 
-        let mut result = String::from(".
-");
+        let mut result = String::from(".\n");
         Self::build_tree_string(&tree, "", &mut result);
         Ok(result)
     }
@@ -100,7 +105,8 @@ mod tests {
     use std::env;
 
     #[test]
-    fn test_get_git_root() -> Result<()> {
+    fn test_get_git_root() -> Result<(), anyhow::Error> {
+
         // Save current directory
         let original_dir = env::current_dir()?;
         

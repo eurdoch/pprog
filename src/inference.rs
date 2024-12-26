@@ -72,59 +72,12 @@ impl MessageContent {
             MessageContent::Items(items) => items.iter(),
         }
     }
-
-    pub fn into_items(self) -> Vec<ContentItem> {
-        match self {
-            MessageContent::Text(text) => vec![ContentItem::Text {
-                content_type: "text".to_string(),
-                text,
-            }],
-            MessageContent::Items(items) => items,
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Message {
     pub role: Role,
     pub content: MessageContent,
-}
-
-impl Message {
-    pub fn new_user_text(text: impl Into<String>) -> Self {
-        Message {
-            role: Role::User,
-            content: MessageContent::Text(text.into()),
-        }
-    }
-
-    pub fn new_assistant_text(text: impl Into<String>) -> Self {
-        Message {
-            role: Role::Assistant,
-            content: MessageContent::Text(text.into()),
-        }
-    }
-
-    pub fn new_with_items(role: Role, items: Vec<ContentItem>) -> Self {
-        Message {
-            role,
-            content: MessageContent::Items(items),
-        }
-    }
-
-    // Helper method to convert String content into ContentItem::Text
-    pub fn normalize(&self) -> Message {
-        match &self.content {
-            MessageContent::Text(text) => Message {
-                role: self.role.clone(),
-                content: MessageContent::Items(vec![ContentItem::Text {
-                    content_type: "text".to_string(),
-                    text: text.clone(),
-                }]),
-            },
-            MessageContent::Items(_) => self.clone(),
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]

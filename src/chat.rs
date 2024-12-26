@@ -40,6 +40,8 @@ impl ChatUI {
             match message.role {
                 Role::User => {
                     let tree_string = GitTree::get_tree()?;
+                    std::fs::write(".log", tree_string.clone()).expect("Failed to write file");
+
                     let system_message = format!(
                         r#"
                         You are a coding assistant working on a project.
@@ -62,8 +64,26 @@ impl ChatUI {
                                 self.add_message(new_message).await?;
                             }
                             ContentItem::ToolUse { name, input, .. } => {
-                                // Tool use handling code here
+                                match GitTree::get_git_root() {
+                                    Ok(root_path) => {
+                                        if name == "write_file" {
+                                            let content = input["content"].as_str().unwrap();
+                                            let path = input["path"].as_str().unwrap();
+                                            let file_path = root_path.join(path);
+                                            std::fs::write(&file_path, content).unwrap();
+                                        }
+
+                                    },
+                                    Err(e) => {
+                                        self.add_message(Message {
+                                            role: Role::Assistant,
+                                            content: MessageContent::Text(format!("Error getting git root: {}", e))
+                                        }).await?;
+                                        return Ok(())
+                                    }
+                                };
                             }
+
                             _ => {}
                         }
                     }

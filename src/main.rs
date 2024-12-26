@@ -1,4 +1,3 @@
-
 mod inference;
 mod chat;
 mod tree;
@@ -7,7 +6,7 @@ mod tooler;
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
 use crossterm::{event::{self, Event, KeyCode}, terminal};
-use inference::{ContentItem, Message, MessageContent, Role, TextContent};
+use inference::{Message, MessageContent, Role};
 
 struct TerminalGuard;
 
