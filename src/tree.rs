@@ -61,14 +61,13 @@ impl GitTree {
 
         let mut result = String::from(".
 ");
-        Self::build_tree_string(&tree, "", true, &mut result);
+        Self::build_tree_string(&tree, "", &mut result);
         Ok(result)
     }
 
     fn build_tree_string(
         tree: &BTreeMap<String, TreeNode>,
         prefix: &str,
-        is_last: bool,
         result: &mut String,
     ) {
         for (i, (name, node)) in tree.iter().enumerate() {
@@ -80,7 +79,7 @@ impl GitTree {
 ", prefix, connector, name));
 
             if let TreeNode::Dir(subtree) = node {
-                Self::build_tree_string(subtree, &format!("{}{}", prefix, next_prefix), is_last_entry, result);
+                Self::build_tree_string(subtree, &format!("{}{}", prefix, next_prefix), result);
             }
         }
     }

@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::{future::Future, io::{self, Write}, pin::Pin};
 use crossterm::{
     cursor,
     execute,
@@ -9,7 +9,7 @@ use crossterm::{
 use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
 
-use crate::{inference::{ContentItem, Inference, Message, Role, TextContent}, tree::GitTree};
+use crate::{inference::{ContentItem, Inference, Message, MessageContent, Role}, tree::GitTree};
 
 pub struct ChatUI {
     pub messages: Vec<Message>,
@@ -34,73 +34,44 @@ impl ChatUI {
         }
     }
 
-    pub async fn add_message(&mut self, message: Message) -> Result<(), anyhow::Error> {
-        self.messages.push(message.clone());
-        match message.role {
-            Role::User => {
-                let tree_string = GitTree::get_tree()?;
-                let system_message = format!(
-                    r#"
-                    You are a coding assistant working on a project.
-                    
-                    File tree structure:
-                    {}
+    pub fn add_message(&mut self, message: Message) -> Pin<Box<dyn Future<Output = Result<(), anyhow::Error>> + '_>> {
+        Box::pin(async move {
+            self.messages.push(message.clone());
+            match message.role {
+                Role::User => {
+                    let tree_string = GitTree::get_tree()?;
+                    let system_message = format!(
+                        r#"
+                        You are a coding assistant working on a project.
+                        
+                        File tree structure:
+                        {}
 
-                    The user will give you instructions on how to change the project code.
-                    "#,
-                    &tree_string,
-                );
-                let response = self.inference.query_anthropic(self.messages.clone(), Some(&system_message)).await?;
-                self.messages.push(Message {
-                    role: Role::Assistant,
-                    content: vec![ContentItem::Text(TextContent {
-                        // TODO this should be changed to &str or enum
-                        content_type: "text".to_string(),
-                        text: format!("{:#?}", response)
-                    })],
-                });
-                //for content_item in &response.content {
-                //    match content_item {
-                //        ContentItem::Text(_) => {
-                //            let new_message = Message {
-                //                role: Role::Assistant,
-                //                content: vec![content_item.clone()],
-                //            };
-                //            self.add_message(new_message);
-                //        }
-                //        ContentItem::ToolUse(_tool_use_content) => {
-                //            //if tool_use_content.name == "write_file" {
-                //            //    match GitTree::get_git_root() {
-                //            //        Ok(git_root_path) => {
-                //            //            let path = tool_use_content.input.get("path")
-                //            //                .and_then(|v| v.as_str())
-                //            //                .ok_or_else(|| anyhow::anyhow!("Missing or invalid path in tool input"))?;
-                //            //            let full_path = git_root_path.join(path);
-                //            //            let content = tool_use_content.input.get("content")
-                //            //                .and_then(|v| v.as_str())
-                //            //                .ok_or_else(|| anyhow::anyhow!("Missing or invalid path in tool input"))?;
-
-                //            //            self.add_message();
-                //            //        }
-                //            //        Err(e) => {
-                //            //            self.add_message(Message {
-                //            //                role: Role::Assistant,
-                //            //                content: 
-                //            //            });
-                //            //        }
-                //            //    }
-                //            //}
-
-                //            //chat.add_message(&format!("{:#?}", tool_use_content), false);
-                //        }
-                //        _ => {}
-                //    }
-                //}
-                Ok(())
-            },
-            Role::Assistant => Ok(()),
-        }
-
+                        The user will give you instructions on how to change the project code.
+                        "#,
+                        &tree_string,
+                    );
+                    let response = self.inference.query_anthropic(self.messages.clone(), Some(&system_message)).await?;
+                    for content_item in &response.content {
+                        match content_item {
+                            ContentItem::Text { text, .. } => {
+                                let new_message = Message {
+                                    role: Role::Assistant,
+                                    content: MessageContent::Text(text.to_string())
+                                };
+                                self.add_message(new_message).await?;
+                            }
+                            ContentItem::ToolUse { name, input, .. } => {
+                                // Tool use handling code here
+                            }
+                            _ => {}
+                        }
+                    }
+                    Ok(())
+                },
+                Role::Assistant => Ok(()),
+            }
+        })
     }
 
     pub fn cleanup(&self) -> io::Result<()> {
@@ -142,26 +113,26 @@ impl ChatUI {
 
     fn write_content<W: Write>(
         writer: &mut W,
-        content: &ContentItem,
+        content_item: &ContentItem,
         prefix_width: usize,
         max_width: usize,
     ) -> io::Result<()> {
-        match content {
-            ContentItem::Text(text_content) => {
-                Self::write_wrapped_text(writer, &text_content.text, prefix_width, max_width)?;
+        match content_item {
+            ContentItem::Text { text, .. } => {
+                Self::write_wrapped_text(writer, text, prefix_width, max_width)?;
             }
-            ContentItem::ToolUse(tool_use) => {
+            ContentItem::ToolUse { name, input, .. } => {
                 let tool_text = format!(
                     "[Tool Use - {}: {}]",
-                    tool_use.name,
-                    serde_json::to_string_pretty(&tool_use.input).unwrap_or_default()
+                    name,
+                    serde_json::to_string_pretty(&input).unwrap_or_default()
                 );
                 Self::write_wrapped_text(writer, &tool_text, prefix_width, max_width)?;
             }
-            ContentItem::ToolResult(tool_result) => {
+            ContentItem::ToolResult { content, .. } => {
                 let result_text = format!(
                     "[Tool Result: {}]",
-                    tool_result.content
+                    content
                 );
                 Self::write_wrapped_text(writer, &result_text, prefix_width, max_width)?;
             }
@@ -188,13 +159,20 @@ impl ChatUI {
             stdout.queue(Print(prefix))?;
             stdout.queue(ResetColor)?;
 
-            // Handle each content item in the message
-            for (i, content) in message.content.iter().enumerate() {
-                if i > 0 {
-                    stdout.queue(cursor::MoveToNextLine(1))?;
-                    stdout.queue(Print(" ".repeat(prefix_width)))?;
+            // Handle the content based on its type
+            match &message.content {
+                MessageContent::Text(text) => {
+                    Self::write_wrapped_text(&mut stdout, text, prefix_width, max_width)?;
                 }
-                Self::write_content(&mut stdout, content, prefix_width, max_width)?;
+                MessageContent::Items(items) => {
+                    for (i, content) in items.iter().enumerate() {
+                        if i > 0 {
+                            stdout.queue(cursor::MoveToNextLine(1))?;
+                            stdout.queue(Print(" ".repeat(prefix_width)))?;
+                        }
+                        Self::write_content(&mut stdout, content, prefix_width, max_width)?;
+                    }
+                }
             }
             
             stdout.queue(cursor::MoveToNextLine(1))?;

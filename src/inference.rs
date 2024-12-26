@@ -6,32 +6,125 @@ use crate::tooler::Tooler;
 
 #[derive(Debug, Deserialize)]
 pub struct AnthropicResponse {
+    pub content: Vec<ContentItem>,
     pub id: String,
+    pub model: String,
+    pub role: String,
     #[serde(rename = "type")]
     pub message_type: String,
-    pub role: String,
-    pub model: String,
-    pub content: Vec<ContentItem>,
     pub stop_reason: String,
     pub stop_sequence: Option<String>,
     pub usage: Usage,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-#[serde(tag = "type")]
+#[serde(untagged)] // Important! This allows matching based on fields present
 pub enum ContentItem {
-    #[serde(rename = "text")]
-    Text(TextContent),
-    #[serde(rename = "tool_use")]
-    ToolUse(ToolUseContent),
-    #[serde(rename = "tool_result")]
-    ToolResult(ToolResultContent),
+    Text {
+        #[serde(rename = "type")]
+        content_type: String,
+        text: String,
+    },
+    ToolUse {
+        #[serde(rename = "type")]
+        content_type: String,
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+    ToolResult {
+        #[serde(rename = "type")]
+        content_type: String,
+        tool_use_id: String,
+        content: String,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(untagged)]
+pub enum MessageContent {
+    Text(String),
+    Items(Vec<ContentItem>),
+}
+
+// Iterator struct to hold temporary content
+pub struct MessageContentIter<'a> {
+    // We need to hold both the temporary item and the original iterator
+    temp_text_item: Option<ContentItem>,
+    items_iter: Option<std::slice::Iter<'a, ContentItem>>,
+}
+
+impl MessageContent {
+    pub fn iter(&mut self) -> impl Iterator<Item = &ContentItem> {
+        match self {
+            MessageContent::Text(text) => {
+                // Convert to Items variant
+                *self = MessageContent::Items(vec![ContentItem::Text {
+                    content_type: "text".to_string(),
+                    text: text.clone(),
+                }]);
+                
+                match self {
+                    MessageContent::Items(items) => items.iter(),
+                    _ => unreachable!(),
+                }
+            }
+            MessageContent::Items(items) => items.iter(),
+        }
+    }
+
+    pub fn into_items(self) -> Vec<ContentItem> {
+        match self {
+            MessageContent::Text(text) => vec![ContentItem::Text {
+                content_type: "text".to_string(),
+                text,
+            }],
+            MessageContent::Items(items) => items,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Message {
     pub role: Role,
-    pub content: Vec<ContentItem>,
+    pub content: MessageContent,
+}
+
+impl Message {
+    pub fn new_user_text(text: impl Into<String>) -> Self {
+        Message {
+            role: Role::User,
+            content: MessageContent::Text(text.into()),
+        }
+    }
+
+    pub fn new_assistant_text(text: impl Into<String>) -> Self {
+        Message {
+            role: Role::Assistant,
+            content: MessageContent::Text(text.into()),
+        }
+    }
+
+    pub fn new_with_items(role: Role, items: Vec<ContentItem>) -> Self {
+        Message {
+            role,
+            content: MessageContent::Items(items),
+        }
+    }
+
+    // Helper method to convert String content into ContentItem::Text
+    pub fn normalize(&self) -> Message {
+        match &self.content {
+            MessageContent::Text(text) => Message {
+                role: self.role.clone(),
+                content: MessageContent::Items(vec![ContentItem::Text {
+                    content_type: "text".to_string(),
+                    text: text.clone(),
+                }]),
+            },
+            MessageContent::Items(_) => self.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
