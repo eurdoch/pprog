@@ -6,9 +6,9 @@ use crossterm::{
     style::{Color, Print, ResetColor, SetForegroundColor},
     QueueableCommand,
 };
+use log::debug;
 use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
-
 use crate::{inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
 
 pub struct ChatUI {
@@ -65,6 +65,7 @@ impl ChatUI {
                         &tree_string,
                     );
                     let response = self.inference.query_anthropic(self.messages.clone(), Some(&system_message)).await?;
+
                     for content_item in &response.content {
                         match content_item {
                             ContentItem::Text { text, .. } => {
@@ -77,13 +78,16 @@ impl ChatUI {
                                 self.add_message(new_message).await?;
                             }
                             ContentItem::ToolUse { name, input, id, .. } => {
-                                self.messages.push(Message {
+                                self.add_message(Message {
                                     role: Role::Assistant,
                                     content: vec![
-                                        ContentItem::Text { text: format!("Tool use: {:#?}", &content_item) }
+                                        ContentItem::ToolUse { 
+                                            id: id.to_string(), 
+                                            name: name.to_string(), 
+                                            input: input.clone(),
+                                        }
                                     ]
-                                });
-                                self.render()?;
+                                }).await?;
 
                                 match GitTree::get_git_root() {
                                     Ok(root_path) => {
@@ -118,12 +122,6 @@ impl ChatUI {
                                                 Ok(_) => format!("Successfully wrote content to file {:?}.", full_path), 
                                                 Err(e) => format!("Error writing to file {:?}: {:?}.", full_path, e), 
                                             };
-                                            self.messages.push(Message {
-                                                role: Role::User,
-                                                content: vec![
-                                                    ContentItem::Text { text: format!("Tool result message {:#?}", tool_result_message) }
-                                                ]
-                                            });
                                             self.add_message(Message {
                                                 role: Role::User,
                                                 content: vec![

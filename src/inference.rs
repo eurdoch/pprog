@@ -3,6 +3,7 @@ use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use std::env;
 use crate::tooler::Tooler;
+use log::{debug, info};
 
 #[derive(Debug, Deserialize)]
 pub struct AnthropicResponse {
@@ -116,6 +117,7 @@ impl Inference {
     }
 
     pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<AnthropicResponse, anyhow::Error> {
+        debug!("Query_anthropic enter");
         let api_key = env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
         let system = system_message.unwrap_or("").to_string();
 
@@ -129,13 +131,7 @@ impl Inference {
             system,
         };
 
-        //use std::fs::File;
-        //use std::io::prelude::*;
-
-        //let mut file = File::create(".log").unwrap();
-        //let _ = write!(file, "{:#?}", response_text);
-
-        let res = self.client
+        let response = self.client
             .post("https://api.anthropic.com/v1/messages")
             .header("Content-Type", "application/json")
             .header("X-API-Key", api_key)
@@ -143,9 +139,12 @@ impl Inference {
             .json(&request)
             .send()
             .await?
-            .json()
+            .text()
             .await?;
 
+        info!("Network response text: {}", response);
+
+        let res: AnthropicResponse = serde_json::from_str(&response)?;
         Ok(res)
     }
 }

@@ -16,6 +16,8 @@ anyhow = "1.0.95"
 unicode-segmentation = "1.10.1"
 textwrap = "0.16"
 gix = "0.55.2"
+log = "0.4"
+env_logger = "0.10"
 
 [dev-dependencies]
 tempfile = "3.8"

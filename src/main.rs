@@ -3,9 +3,12 @@ mod chat;
 mod tree;
 mod tooler;
 
+use std::fs::OpenOptions;
+
 use chat::ChatUI;
 use clap::{Parser, Subcommand};
 use crossterm::{event::{self, Event, KeyCode}, terminal};
+use env_logger::{Builder, Target};
 use inference::{ContentItem, Message, Role};
 
 struct TerminalGuard;
@@ -30,6 +33,23 @@ struct Cli {
 enum Commands {
     Init,
     Chat,
+}
+
+fn setup_logger() -> Result<(), Box<dyn std::error::Error>> {
+    // Create or append to log file
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(".prodomme.log")?;
+
+    // Create a custom logger configuration
+    let mut builder = Builder::from_default_env();
+    builder
+        .target(Target::Pipe(Box::new(file)))
+        .format_timestamp_secs()
+        .init();
+
+    Ok(())
 }
 
 async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
@@ -81,6 +101,7 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+    setup_logger()?;
 
     match &cli.command {
         Some(Commands::Init) => {
