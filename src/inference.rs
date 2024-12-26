@@ -18,23 +18,20 @@ pub struct AnthropicResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-#[serde(untagged)] // Important! This allows matching based on fields present
+#[serde(tag = "type")]
 pub enum ContentItem {
+    #[serde(rename = "text")]
     Text {
-        #[serde(rename = "type")]
-        content_type: String,
         text: String,
     },
+    #[serde(rename = "tool_use")]
     ToolUse {
-        #[serde(rename = "type")]
-        content_type: String,
         id: String,
         name: String,
         input: serde_json::Value,
     },
+    #[serde(rename = "tool_result")]
     ToolResult {
-        #[serde(rename = "type")]
-        content_type: String,
         tool_use_id: String,
         content: String,
     },
@@ -60,7 +57,6 @@ impl MessageContent {
             MessageContent::Text(text) => {
                 // Convert to Items variant
                 *self = MessageContent::Items(vec![ContentItem::Text {
-                    content_type: "text".to_string(),
                     text: text.clone(),
                 }]);
                 
@@ -165,6 +161,12 @@ impl Inference {
             system,
         };
 
+        //use std::fs::File;
+        //use std::io::prelude::*;
+
+        //let mut file = File::create(".log").unwrap();
+        //let _ = write!(file, "{:#?}", response_text);
+
         let res = self.client
             .post("https://api.anthropic.com/v1/messages")
             .header("Content-Type", "application/json")
@@ -178,6 +180,5 @@ impl Inference {
 
         Ok(res)
     }
-
 }
 

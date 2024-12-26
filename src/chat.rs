@@ -76,7 +76,6 @@ impl ChatUI {
                                                 role: Role::User,
                                                 content: MessageContent::Items(vec![
                                                     ContentItem::ToolResult { 
-                                                        content_type: "tool_result".to_string(), 
                                                         tool_use_id: id.to_string(), 
                                                         content: result_content,
                                                     }
