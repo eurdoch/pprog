@@ -40,8 +40,6 @@ impl ChatUI {
             match message.role {
                 Role::User => {
                     let tree_string = GitTree::get_tree()?;
-                    std::fs::write(".log", tree_string.clone()).expect("Failed to write file");
-
                     let system_message = format!(
                         r#"
                         You are a coding assistant working on a project.
@@ -63,14 +61,28 @@ impl ChatUI {
                                 };
                                 self.add_message(new_message).await?;
                             }
-                            ContentItem::ToolUse { name, input, .. } => {
+                            ContentItem::ToolUse { name, input, id, .. } => {
                                 match GitTree::get_git_root() {
                                     Ok(root_path) => {
                                         if name == "write_file" {
                                             let content = input["content"].as_str().unwrap();
                                             let path = input["path"].as_str().unwrap();
                                             let file_path = root_path.join(path);
-                                            std::fs::write(&file_path, content).unwrap();
+                                            let result_content = match std::fs::write(&file_path, content) {
+                                                Ok(_) => format!("Successfully wrote content to file {:?}.", &file_path),
+                                                Err(e) => format!("Error writing file {:?}: {:?}.", &file_path, e),
+                                            };
+                                            let new_message = Message {
+                                                role: Role::User,
+                                                content: MessageContent::Items(vec![
+                                                    ContentItem::ToolResult { 
+                                                        content_type: "tool_result".to_string(), 
+                                                        tool_use_id: id.to_string(), 
+                                                        content: result_content,
+                                                    }
+                                                ])
+                                            };
+                                            self.add_message(new_message).await?;
                                         }
 
                                     },
@@ -141,9 +153,10 @@ impl ChatUI {
             ContentItem::Text { text, .. } => {
                 Self::write_wrapped_text(writer, text, prefix_width, max_width)?;
             }
-            ContentItem::ToolUse { name, input, .. } => {
+            ContentItem::ToolUse { name, input, id, .. } => {
                 let tool_text = format!(
-                    "[Tool Use - {}: {}]",
+                    "[Tool Use {} - {}: {}]",
+                    id,
                     name,
                     serde_json::to_string_pretty(&input).unwrap_or_default()
                 );
