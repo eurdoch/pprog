@@ -40,7 +40,7 @@ fn setup_logger() -> Result<(), Box<dyn std::error::Error>> {
     let file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(".prodomme.log")?;
+        .open(".cmonk.log")?;
 
     // Create a custom logger configuration
     let mut builder = Builder::from_default_env();
@@ -116,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         None => {
-            println!("No subcommand provided");
+            Cli::parse().print_help().ok();
         }
     }
 

@@ -245,6 +245,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbd0f76e066e64fdc5631e3bb46381254deab9ef1158292f27c8c57e3bf3fe59"
 
 [[package]]
+name = "cmonk"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "crossterm",
+ "env_logger",
+ "gix",
+ "log",
+ "once_cell",
+ "reqwest",
+ "scopeguard",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "textwrap",
+ "tokio",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1961,27 +1982,6 @@ checksum = "794b5bf8e2d19b53dcdcec3e4bba628e20f5b6062503ba89281fa7037dd7bbcf"
 dependencies = [
  "bytesize",
  "human_format",
-]
-
-[[package]]
-name = "prodomme"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "crossterm",
- "env_logger",
- "gix",
- "log",
- "once_cell",
- "reqwest",
- "scopeguard",
- "serde",
- "serde_json",
- "tempfile",
- "textwrap",
- "tokio",
- "unicode-segmentation",
 ]
 
 [[package]]
