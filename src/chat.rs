@@ -219,36 +219,6 @@ impl ChatUI {
         Ok(())
     }
 
-    fn write_content<W: Write>(
-        writer: &mut W,
-        content_item: &ContentItem,
-        prefix_width: usize,
-        max_width: usize,
-    ) -> io::Result<()> {
-        match content_item {
-            ContentItem::Text { text, .. } => {
-                Self::write_wrapped_text(writer, text, prefix_width, max_width)?;
-            }
-            ContentItem::ToolUse { name, input, id, .. } => {
-                let tool_text = format!(
-                    "[Tool Use {} - {}: {}]",
-                    id,
-                    name,
-                    serde_json::to_string_pretty(&input).unwrap_or_default()
-                );
-                Self::write_wrapped_text(writer, &tool_text, prefix_width, max_width)?;
-            }
-            ContentItem::ToolResult { content, .. } => {
-                let result_text = format!(
-                    "[Tool Result: {}]",
-                    content
-                );
-                Self::write_wrapped_text(writer, &result_text, prefix_width, max_width)?;
-            }
-        }
-        Ok(())
-    }
-
     pub fn render(&self) -> io::Result<()> {
         let mut stdout = io::stdout();
         

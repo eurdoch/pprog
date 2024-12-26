@@ -5,6 +5,7 @@ use std::env;
 use crate::tooler::Tooler;
 use log::{debug, info};
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct AnthropicResponse {
     pub content: Vec<ContentItem>,

@@ -31,7 +31,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    #[command(about = "Initialize config for project")]
     Init,
+    #[command(about = "Open chat window")]
     Chat,
 }
 
@@ -39,7 +41,7 @@ fn setup_logger() -> Result<(), Box<dyn std::error::Error>> {
     let file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(".cmonk.log")?;
+        .open(".cmon.log")?;
 
     let mut builder = Builder::from_default_env();
     builder
