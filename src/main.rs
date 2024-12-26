@@ -6,7 +6,7 @@ mod tooler;
 use std::fs::OpenOptions;
 
 use chat::ChatUI;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use crossterm::{event::{self, Event, KeyCode}, terminal};
 use env_logger::{Builder, Target};
 use inference::{ContentItem, Message, Role};
@@ -22,8 +22,8 @@ impl Drop for TerminalGuard {
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    #[arg(short, long)]
-    force: bool,
+    //#[arg(short, long)]
+    //force: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -36,13 +36,11 @@ enum Commands {
 }
 
 fn setup_logger() -> Result<(), Box<dyn std::error::Error>> {
-    // Create or append to log file
     let file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(".cmonk.log")?;
 
-    // Create a custom logger configuration
     let mut builder = Builder::from_default_env();
     builder
         .target(Target::Pipe(Box::new(file)))
@@ -116,7 +114,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         None => {
-            Cli::parse().print_help().ok();
+            let mut cmd = Cli::command();
+            cmd.print_help()?;
         }
     }
 
