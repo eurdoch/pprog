@@ -40,10 +40,18 @@ enum Commands {
 }
 
 fn setup_logger() -> Result<(), Box<dyn std::error::Error>> {
+    let home_dir = dirs::home_dir().expect("Failed to get home directory");
+    let cmon_dir = home_dir.join(".cmon");
+    if !cmon_dir.exists() {
+        std::fs::create_dir_all(&cmon_dir).expect("Failed to create .cmon directory");
+    }
+    let log_file_path = cmon_dir.join("log");
+
     let file = OpenOptions::new()
         .create(true)
-        .append(true)
-        .open(".cmon.log")?;
+        .write(true)
+        .truncate(true)
+        .open(log_file_path)?;
 
     let mut builder = Builder::from_default_env();
     builder
