@@ -108,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.command {
         Some(Commands::Init) => {
             match ProjectConfig::init() {
-                Ok(_) => println!("cmon.toml created."),
+                Ok(_) => println!("Init successful."),
                 Err(e) => eprintln!("Failed to initialize project: {}", e),
             }
         }

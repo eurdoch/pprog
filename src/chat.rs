@@ -140,7 +140,8 @@ impl ChatUI {
                                                     }
                                                 ]
                                             }).await?;
-
+                                            // TODO do compile check and if errors or warnings make
+                                            // another call
                                         } else if name == "read_file" {
                                             let file_path = match self.extract_string_field(input, "path") {
                                                 Ok(content) => content,

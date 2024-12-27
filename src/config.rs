@@ -95,13 +95,7 @@ impl ProjectConfig {
         };
         config.save()?;
 
-        println!("Initialized new project in {} with check command: {}", 
-                config_dir.display(), config.check_cmd);
         Ok(())
-    }
-
-    pub fn is_initialized() -> bool {
-        Self::config_path().exists()
     }
 }
 
