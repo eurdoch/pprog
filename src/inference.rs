@@ -132,6 +132,7 @@ impl Inference {
         let system = system_message.unwrap_or("").to_string();
 
         let tools = self.tooler.get_tools_json()?;
+        log::info!("{:#?}", tools);
 
         let request = AnthropicRequest {
             model: &self.model,

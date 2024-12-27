@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-
 use crate::config::ProjectConfig;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -83,6 +82,7 @@ impl Tooler {
             },
         ];
 
+        log::info!("{}", config.check_cmd);
         if config.check_cmd != "" {
             tools.push(
                 Tool {
@@ -101,7 +101,7 @@ impl Tooler {
                             );
                             map
                         },
-                        required: vec!["path".to_string(), "content".to_string()],
+                        required: vec!["cmd".to_string()],
                     },
                 },
             );
