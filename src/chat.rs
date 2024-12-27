@@ -57,10 +57,9 @@ impl ChatUI {
 
                         The user will give you instructions on how to change the project code.
 
-                        If you use tool 'write_file' successfully and tool 'compile_check' is available, call compile_check.
-                        If compile_check shows any errors, make subsequent calls to write_file to 
-                        fix the errors.  Continue checking and rewriting until there are no more errors.
-                        If there are warnings then do not try to fix them, just let the user know.
+                        If you use tool 'write_file' successfully and tool 'compile_check' is available, call compile_check.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
+
+                        Never make any changes outside of the project's root directory.
                         "#,
                         &tree_string,
                     );
@@ -195,7 +194,42 @@ Stderr:
                                                     }
                                                 ]
                                             }).await?;
-                                        }
+                                       } else if name == "execute" {
+                                            let statement = match self.extract_string_field(input, "statement") {
+                                                Ok(cmd) => cmd,
+                                                Err(e) => {
+                                                    self.add_message(Message {
+                                                        role: Role::Assistant,
+                                                        content: vec![
+                                                            ContentItem::Text { text: e }
+                                                        ]
+                                                    }).await?;
+                                                    return Ok(());
+                                                }
+                                            };
+                                            let output = Command::new("bash")
+                                                .arg("-c")
+                                                .arg(statement)
+                                                .current_dir(root_path)
+                                                .output()
+                                                .expect("Failed to execute command");
+
+                                            let stdout = String::from_utf8_lossy(&output.stdout);
+                                            let stderr = String::from_utf8_lossy(&output.stderr);
+                                            let tool_result_message = format!("Stdout:
+{}
+Stderr:
+{}", stdout, stderr);
+                                            self.add_message(Message {
+                                                role: Role::User,
+                                                content: vec![
+                                                    ContentItem::ToolResult {
+                                                        tool_use_id: id.to_string(),
+                                                        content: tool_result_message,
+                                                    }
+                                                ]
+                                            }).await?;
+                                       }
                                     },
 
                                     Err(e) => {

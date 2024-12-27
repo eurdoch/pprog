@@ -80,6 +80,25 @@ impl Tooler {
                     required: vec!["path".to_string(), "content".to_string()],
                 },
             },
+            Tool {
+                name: "execute".to_string(),
+                description: "Execute bash statements as a single string..".to_string(),
+                input_schema: InputSchema {
+                    schema_type: "object".to_string(),
+                    properties: {
+                        let mut map = HashMap::new();
+                        map.insert(
+                            "statement".to_string(),
+                            PropertySchema {
+                                property_type: "string".to_string(),
+                                description: "The bash statement to be executed.".to_string(),
+                            },
+                        );
+                        map
+                    },
+                    required: vec!["statement".to_string()],
+                },
+            },
         ];
 
         log::info!("{}", config.check_cmd);
