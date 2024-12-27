@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::tree::GitTree;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectConfig {
     pub model: String,
@@ -21,28 +23,35 @@ impl ProjectConfig {
     const CONFIG_FILE: &'static str = "cmon.toml";
 
     fn detect_check_cmd() -> String {
-        let path = Path::new(".");
+        let root_path = match GitTree::get_git_root() {
+            Ok(root) => root.join(Self::CONFIG_FILE),
+            Err(e) => {
+                eprintln!("Unable to determine Git root directory: {}", e);
+                std::process::exit(1);
+            }
+        };
+
         
         // Check for Rust project (Cargo.toml)
-        if path.join("Cargo.toml").exists() {
+        if root_path.join("Cargo.toml").exists() {
             return String::from("cargo check");
         }
         
         // TODO should run code through node after tsc and check for errors
         // Check for TypeScript project (tsconfig.json)
-        if path.join("tsconfig.json").exists() {
+        if root_path.join("tsconfig.json").exists() {
             return String::from("tsc --noEmit");
         }
         
         // Check for Java project (gradlew)
-        if path.join("gradlew").exists() {
+        if root_path.join("gradlew").exists() {
             return String::from("./gradlew check");
         }
         
         // TODO should run code through node to check for errors
-        if path.join("package.json").exists() {
+        if root_path.join("package.json").exists() {
             // If we find eslint config, use that for checking
-            if path.join(".eslintrc.json").exists() || path.join(".eslintrc.js").exists() {
+            if root_path.join(".eslintrc.json").exists() || root_path.join(".eslintrc.js").exists() {
                 return String::from("eslint .");
             }
             return String::from("npm run lint");
@@ -51,9 +60,14 @@ impl ProjectConfig {
         String::from("echo 'No check command configured'")
     }
 
-
     pub fn config_path() -> PathBuf {
-        Path::new(".").join(Self::CONFIG_FILE)
+         match GitTree::get_git_root() {
+            Ok(root) => root.join(Self::CONFIG_FILE),
+            Err(e) => {
+                eprintln!("Unable to determine Git root directory: {}", e);
+                std::process::exit(1);
+            }
+        }
     }
 
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
