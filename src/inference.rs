@@ -2,7 +2,7 @@ use anyhow::Result;
 use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use std::env;
-use crate::tooler::Tooler;
+use crate::{config::ProjectConfig, tooler::Tooler};
 use log::{debug, info};
 
 #[allow(dead_code)]
@@ -105,13 +105,22 @@ struct AnthropicRequest<'a> {
 }
 
 pub struct Inference {
+    model: String,
     client: Client,
     tooler: Tooler,
 }
 
 impl Inference {
     pub fn new() -> Self {
+        let config = match ProjectConfig::load() {
+            Ok(config) => config,
+            Err(_) => {
+                info!("Could not find config, defaulting to model claude-3-5-latest");
+                ProjectConfig::default()
+            }
+        };
         Inference {
+            model: config.model,
             client: Client::new(),
             tooler: Tooler::new(),
         }

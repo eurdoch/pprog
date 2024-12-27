@@ -60,21 +60,14 @@ impl ProjectConfig {
         String::from("echo 'No check command configured'")
     }
 
-    pub fn config_path() -> PathBuf {
-         match GitTree::get_git_root() {
-            Ok(root) => root.join(Self::CONFIG_FILE),
-            Err(e) => {
-                eprintln!("Unable to determine Git root directory: {}", e);
-                std::process::exit(1);
-            }
-        }
+    pub fn config_path() -> Result<PathBuf, String> {
+        GitTree::get_git_root()
+            .map(|root| root.join(Self::CONFIG_FILE))
+            .map_err(|e| format!("Unable to determine Git root directory: {}", e))
     }
 
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let config_path = Self::config_path();
-        if !config_path.exists() {
-            return Err("Project not initialized. Run 'init' first.".into());
-        }
+        let config_path = Self::config_path()?;
 
         let content = fs::read_to_string(config_path)?;
         let config: ProjectConfig = toml::from_str(&content)?;
@@ -82,13 +75,9 @@ impl ProjectConfig {
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let config_dir = Path::new(".");
-        if !config_dir.exists() {
-            fs::create_dir_all(config_dir)?;
-        }
-
         let config_str = toml::to_string_pretty(self)?;
-        fs::write(Self::config_path(), config_str)?;
+        let config_path = Self::config_path()?;
+        fs::write(config_path, config_str)?;
         Ok(())
     }
 

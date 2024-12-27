@@ -39,7 +39,7 @@ enum Commands {
     Chat,
 }
 
-fn setup_logger() -> Result<(), Box<dyn std::error::Error>> {
+fn setup_logger() -> Result<(), anyhow::Error> {
     let home_dir = dirs::home_dir().expect("Failed to get home directory");
     let cmon_dir = home_dir.join(".cmon");
     if !cmon_dir.exists() {
