@@ -2,11 +2,13 @@ mod inference;
 mod chat;
 mod tree;
 mod tooler;
+mod config;
 
 use std::fs::OpenOptions;
 
 use chat::ChatUI;
 use clap::{CommandFactory, Parser, Subcommand};
+use config::ProjectConfig;
 use crossterm::{event::{self, Event, KeyCode}, terminal};
 use env_logger::{Builder, Target};
 use inference::{ContentItem, Message, Role};
@@ -105,8 +107,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match &cli.command {
         Some(Commands::Init) => {
-            println!("Initializing new project");
-            // Perform initialization logic here
+            match ProjectConfig::init() {
+                Ok(_) => println!("cmon.toml created."),
+                Err(e) => eprintln!("Failed to initialize project: {}", e),
+            }
         }
         Some(Commands::Chat) => {
             if let Err(e) = run_chat().await {

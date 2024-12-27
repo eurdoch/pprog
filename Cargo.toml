@@ -18,6 +18,8 @@ textwrap = "0.16"
 gix = "0.55.2"
 log = "0.4"
 env_logger = "0.10"
+config = "0.15.4"
+toml = "0.8.19"
 
 [dev-dependencies]
 tempfile = "3.8"
