@@ -8,14 +8,13 @@ use crossterm::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
-use crate::{config::ProjectConfig, inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
+use crate::{inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
 
 pub struct ChatUI {
     pub messages: Vec<Message>,
     pub input_buffer: String,
     terminal_width: u16,
     inference: Inference,
-    config: ProjectConfig
 }
 
 impl ChatUI {
@@ -23,13 +22,13 @@ impl ChatUI {
         // Enable raw mode when creating the UI
         enable_raw_mode().unwrap();
 
-        let config = match ProjectConfig::load() {
-            Ok(cfg) => cfg,
-            Err(e) => {
-                eprintln!("Failed to load project config: {}", e);
-                std::process::exit(1);
-            }
-        };
+        //let config = match ProjectConfig::load() {
+        //    Ok(cfg) => cfg,
+        //    Err(e) => {
+        //        eprintln!("Failed to load project config: {}", e);
+        //        std::process::exit(1);
+        //    }
+        //};
         
         // Get terminal size
         let (width, _) = crossterm::terminal::size().unwrap_or((80, 24));
@@ -39,7 +38,6 @@ impl ChatUI {
             input_buffer: String::new(),
             terminal_width: width,
             inference: Inference::new(),
-            config
         }
     }
 
@@ -70,6 +68,11 @@ impl ChatUI {
                         {}
 
                         The user will give you instructions on how to change the project code.
+
+                        If you write to a file successfully and tool 'compile_check' is available, call compile_check.
+                        If compile_check shows any errors, make subsequent calls to write_file to 
+                        fix the errors.  Continue checking and rewriting until there are no more errors.
+                        If there are warnings then do not try to fix them, just let the user know.
                         "#,
                         &tree_string,
                     );
