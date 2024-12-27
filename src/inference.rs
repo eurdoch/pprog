@@ -134,7 +134,7 @@ impl Inference {
         let tools = self.tooler.get_tools_json()?;
 
         let request = AnthropicRequest {
-            model: "claude-3-5-sonnet-20241022",
+            model: &self.model,
             messages,
             max_tokens: 8096,
             tools,
