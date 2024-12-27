@@ -1,4 +1,3 @@
-
 use std::{future::Future, io::{self, Write}, pin::Pin, process::Command};
 use crossterm::{
     cursor,
@@ -9,12 +8,11 @@ use crossterm::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
-use crate::{config::ProjectConfig, inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
+use crate::{inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
 
 pub struct ChatUI {
     pub messages: Vec<Message>,
     pub input_buffer: String,
-    terminal_width: u16,
     inference: Inference,
 }
 
@@ -23,21 +21,9 @@ impl ChatUI {
         // Enable raw mode when creating the UI
         enable_raw_mode().unwrap();
 
-        let config = match ProjectConfig::load() {
-            Ok(cfg) => cfg,
-            Err(e) => {
-                eprintln!("Failed to load project config: {}", e);
-                std::process::exit(1);
-            }
-        };
-        
-        // Get terminal size
-        let (width, _) = crossterm::terminal::size().unwrap_or((80, 24));
-        
         Self {
             messages: Vec::new(),
             input_buffer: String::new(),
-            terminal_width: width,
             inference: Inference::new(),
         }
     }
@@ -291,11 +277,11 @@ Stderr:
             for content_item in &message.content {
                 let text = match content_item {
                     ContentItem::Text { text } => text,
-                    ContentItem::ToolResult { tool_use_id, content } => {
+                    ContentItem::ToolResult { content, .. } => {
                         message_lines += 1; // Account for the tool result header
                         content
                     },
-                    ContentItem::ToolUse { id, name, .. } => {
+                    ContentItem::ToolUse { .. } => {
                         message_lines += 1; // Account for the tool use header
                         continue;
                     }
@@ -349,7 +335,7 @@ Stderr:
                     ContentItem::Text { text } => {
                         Self::write_wrapped_text(&mut stdout, text, prefix_width, max_width)?;
                     },
-                    ContentItem::ToolResult { tool_use_id, content } => {
+                    ContentItem::ToolResult { tool_use_id, .. } => {
                         let result_text = format!("Tool result - {}", tool_use_id);
                         Self::write_wrapped_text(&mut stdout, &result_text, prefix_width, max_width)?;
                     },
@@ -381,4 +367,3 @@ impl Drop for ChatUI {
         let _ = self.cleanup();
     }
 }
-
