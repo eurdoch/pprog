@@ -12,6 +12,8 @@ use config::ProjectConfig;
 use crossterm::{event::{self, Event, KeyCode}, terminal};
 use env_logger::{Builder, Target};
 use inference::{ContentItem, Message, Role};
+use tree::GitTree;
+use std::io::Write;
 
 struct TerminalGuard;
 
@@ -117,9 +119,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match &cli.command {
         Some(Commands::Init) => {
-            match ProjectConfig::init() {
-                Ok(_) => println!("Init successful."),
-                Err(e) => eprintln!("Failed to initialize project: {}", e),
+            if let Err(e) = ProjectConfig::init() {
+                eprintln!("Failed to initialize project: {}", e);
+            } else {
+                    let git_root = match GitTree::get_git_root() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Git root not found: {}.  Please setup git before initializing.", e);
+                        std::process::exit(1);
+                    }
+                };
+
+                let gitignore_path = git_root.join(".gitignore");
+                if gitignore_path.exists() {
+                    let mut gitignore = std::fs::OpenOptions::new()
+                        .write(true)
+                        .append(true)
+                        .open(gitignore_path)
+                        .unwrap();
+                    writeln!(gitignore, "cmon.toml").unwrap();
+                }
+                println!("Init successful.");
             }
         }
         Some(Commands::Chat) => {
