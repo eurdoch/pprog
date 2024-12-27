@@ -350,7 +350,7 @@ Stderr:
                         Self::write_wrapped_text(&mut stdout, text, prefix_width, max_width)?;
                     },
                     ContentItem::ToolResult { tool_use_id, content } => {
-                        let result_text = format!("Tool result - {} - {}", tool_use_id, content);
+                        let result_text = format!("Tool result - {}", tool_use_id);
                         Self::write_wrapped_text(&mut stdout, &result_text, prefix_width, max_width)?;
                     },
                     ContentItem::ToolUse { id, name, .. } => {
