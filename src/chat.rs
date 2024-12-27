@@ -8,7 +8,7 @@ use crossterm::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
-use crate::{inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
+use crate::{config::ProjectConfig, inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
 
 pub struct ChatUI {
     pub messages: Vec<Message>,
@@ -22,13 +22,13 @@ impl ChatUI {
         // Enable raw mode when creating the UI
         enable_raw_mode().unwrap();
 
-        //let config = match ProjectConfig::load() {
-        //    Ok(cfg) => cfg,
-        //    Err(e) => {
-        //        eprintln!("Failed to load project config: {}", e);
-        //        std::process::exit(1);
-        //    }
-        //};
+        let config = match ProjectConfig::load() {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("Failed to load project config: {}", e);
+                std::process::exit(1);
+            }
+        };
         
         // Get terminal size
         let (width, _) = crossterm::terminal::size().unwrap_or((80, 24));

@@ -1,3 +1,4 @@
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,7 +15,7 @@ impl Default for ProjectConfig {
     fn default() -> Self {
         ProjectConfig {
             model: String::from("claude-3-5-sonnet-latest"),
-            check_cmd: String::from("echo 'No check command configured'"),
+            check_cmd: String::new(),
         }
     }
 }
@@ -22,16 +23,17 @@ impl Default for ProjectConfig {
 impl ProjectConfig {
     const CONFIG_FILE: &'static str = "cmon.toml";
 
+    // TODO handle errors btter
     fn detect_check_cmd() -> String {
         let root_path = match GitTree::get_git_root() {
-            Ok(root) => root.join(Self::CONFIG_FILE),
+            Ok(root) => root,
             Err(e) => {
                 eprintln!("Unable to determine Git root directory: {}", e);
                 std::process::exit(1);
             }
         };
 
-        
+
         // Check for Rust project (Cargo.toml)
         if root_path.join("Cargo.toml").exists() {
             return String::from("cargo check");
@@ -48,16 +50,15 @@ impl ProjectConfig {
             return String::from("./gradlew check");
         }
         
-        // TODO should run code through node to check for errors
         if root_path.join("package.json").exists() {
-            // If we find eslint config, use that for checking
-            if root_path.join(".eslintrc.json").exists() || root_path.join(".eslintrc.js").exists() {
-                return String::from("eslint .");
+            let package_json = std::fs::read_to_string(root_path.join("package.json")).unwrap_or_default();
+            let package_data: serde_json::Value = serde_json::from_str(&package_json).unwrap_or_default();
+            if let Some(main) = package_data.get("main").and_then(|v| v.as_str().map(String::from)) {
+                return format!("node {}", main);
             }
-            return String::from("npm run lint");
         }
-        
-        String::from("echo 'No check command configured'")
+
+        String::new()
     }
 
     pub fn config_path() -> Result<PathBuf, String> {

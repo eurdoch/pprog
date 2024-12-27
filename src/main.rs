@@ -51,12 +51,14 @@ fn setup_logger() -> Result<(), anyhow::Error> {
         .create(true)
         .write(true)
         .truncate(true)
-        .open(log_file_path)?;
+        .open(&log_file_path)?;
 
     let mut builder = Builder::from_default_env();
     builder
         .target(Target::Pipe(Box::new(file)))
         .format_timestamp_secs()
+        // Add explicit level filter
+        .filter_level(log::LevelFilter::Info)
         .init();
 
     Ok(())
