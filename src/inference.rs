@@ -151,7 +151,8 @@ impl Inference {
             .text()
             .await?;
 
-        info!("Network response text: {}", response);
+        // TODO for errors add different type tha tcan be returned to chat display error
+        log::info!("Network response text: {}", response);
 
         let res: AnthropicResponse = serde_json::from_str(&response)?;
         Ok(res)
