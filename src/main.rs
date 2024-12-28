@@ -122,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Err(e) = ProjectConfig::init() {
                 eprintln!("Failed to initialize project: {}", e);
             } else {
-                    let git_root = match GitTree::get_git_root() {
+                let git_root = match GitTree::get_git_root() {
                     Ok(p) => p,
                     Err(e) => {
                         eprintln!("Git root not found: {}.  Please setup git before initializing.", e);
@@ -137,9 +137,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .append(true)
                         .open(gitignore_path)
                         .unwrap();
-                    writeln!(gitignore, "cmon.toml").unwrap();
+
+                    writeln!(gitignore, "\n# cmon config\ncmon.toml\n").unwrap();
                 }
                 println!("Init successful.");
+
             }
         }
         Some(Commands::Chat) => {
