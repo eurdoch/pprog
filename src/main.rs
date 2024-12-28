@@ -131,15 +131,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 let gitignore_path = git_root.join(".gitignore");
-                if gitignore_path.exists() {
-                    let mut gitignore = std::fs::OpenOptions::new()
-                        .write(true)
-                        .append(true)
-                        .open(gitignore_path)
-                        .unwrap();
+                let mut gitignore = std::fs::OpenOptions::new()
+                    .write(true)
+                    .append(true)
+                    .create(true)
+                    .open(gitignore_path)
+                    .unwrap();
 
-                    writeln!(gitignore, "\n# cmon config\ncmon.toml\n").unwrap();
-                }
+                writeln!(gitignore, r#"
+# cmon config
+cmon.toml
+"#)?;
+
                 println!("Init successful.");
 
             }
