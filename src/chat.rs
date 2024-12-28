@@ -271,7 +271,7 @@ impl ChatUI {
         
         for content_item in message.content.iter() {
             match content_item {
-                ContentItem::Text { text } | ContentItem::ToolResult { content: text, .. } => {
+                ContentItem::Text { text } => {
                     let wrap_width = max_width.saturating_sub(prefix_width);
                     let options = Options::new(wrap_width)
                         .break_words(true)
@@ -285,6 +285,15 @@ impl ChatUI {
                 },
                 ContentItem::ToolUse { id, name, .. } => {
                     let tool_text = format!("Tool use {} - {}", id, name);
+                    let wrap_width = max_width.saturating_sub(prefix_width);
+                    let options = Options::new(wrap_width)
+                        .break_words(true)
+                        .word_splitter(textwrap::WordSplitter::NoHyphenation);
+                    
+                    total_lines += wrap(&tool_text, options).len();
+                },
+                ContentItem::ToolResult { tool_use_id, .. } => {
+                    let tool_text = format!("Tool result {}", tool_use_id);
                     let wrap_width = max_width.saturating_sub(prefix_width);
                     let options = Options::new(wrap_width)
                         .break_words(true)
