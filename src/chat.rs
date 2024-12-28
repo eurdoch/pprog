@@ -66,10 +66,10 @@ impl Chat {
                                     ContentItem::Text { text: text.to_string() }
                                 ]
                             };
-                            self.messages.push(new_message);
+                            self.add_message(new_message).await?;
                         }
                         ContentItem::ToolUse { name, input, id, .. } => {
-                            self.messages.push(Message {
+                            self.add_message(Message {
                                 role: Role::Assistant,
                                 content: vec![
                                     ContentItem::ToolUse { 
@@ -78,7 +78,7 @@ impl Chat {
                                         input: input.clone(),
                                     }
                                 ]
-                            });
+                            }).await?;
 
                             match GitTree::get_git_root() {
                                 Ok(root_path) => {
@@ -86,24 +86,24 @@ impl Chat {
                                         let content = match Self::extract_string_field(input, "content") {
                                             Ok(content) => content,
                                             Err(error_msg) => {
-                                                self.messages.push(Message {
+                                                self.add_message(Message {
                                                     role: Role::Assistant,
                                                     content: vec![
                                                         ContentItem::Text { text: error_msg }
                                                     ]
-                                                });
+                                                }).await;
                                                 return Ok(());
                                             }
                                         };
                                         let file_path = match Self::extract_string_field(input, "path") {
                                             Ok(content) => content,
                                             Err(error_msg) => {
-                                                self.messages.push(Message {
+                                                self.add_message(Message {
                                                     role: Role::Assistant,
                                                     content: vec![
                                                         ContentItem::Text { text: error_msg }
                                                     ]
-                                                });
+                                                }).await?;
                                                 return Ok(());
                                             }
                                         };
@@ -113,7 +113,7 @@ impl Chat {
                                             Ok(_) => format!("Successfully wrote content to file {:?}.", full_path), 
                                             Err(e) => format!("Error writing to file {:?}: {:?}.", full_path, e), 
                                         };
-                                        self.messages.push(Message {
+                                        self.add_message(Message {
                                             role: Role::User,
                                             content: vec![
                                                 ContentItem::ToolResult { 
@@ -121,17 +121,17 @@ impl Chat {
                                                     content: tool_result_message,
                                                 }
                                             ]
-                                        });
+                                        }).await?;
                                     } else if name == "read_file" {
                                         let file_path = match Self::extract_string_field(input, "path") {
                                             Ok(content) => content,
                                             Err(error_msg) => {
-                                                self.messages.push(Message {
+                                                self.add_message(Message {
                                                     role: Role::Assistant,
                                                     content: vec![
                                                         ContentItem::Text { text: error_msg }
                                                     ]
-                                                });
+                                                }).await?;
                                                 return Ok(());
                                             }
                                         };
@@ -140,7 +140,7 @@ impl Chat {
                                             Ok(file_content) => file_content,
                                             Err(e) => format!("Error reading file {:?}: {:?}.", full_path, e),
                                         };
-                                        self.messages.push(Message {
+                                        self.add_message(Message {
                                             role: Role::User,
                                             content: vec![
                                                 ContentItem::ToolResult { 
@@ -148,17 +148,17 @@ impl Chat {
                                                     content: tool_result_message,
                                                 }
                                             ]
-                                        });
+                                        }).await?;
                                     } else if name == "compile_check" {
                                         let check_cmd = match Self::extract_string_field(input, "cmd") {
                                             Ok(cmd) => cmd,
                                             Err(e) => {
-                                                self.messages.push(Message {
+                                                self.add_message(Message {
                                                     role: Role::Assistant,
                                                     content: vec![
                                                         ContentItem::Text { text: e }
                                                     ]
-                                                });
+                                                }).await?;
                                                 return Ok(());
                                             }
                                         };
@@ -172,7 +172,7 @@ impl Chat {
                                         let stdout = String::from_utf8_lossy(&output.stdout);
                                         let stderr = String::from_utf8_lossy(&output.stderr);
                                         let tool_result_message = format!("Stdout:\n{}\nStderr:\n{}", stdout, stderr);
-                                        self.messages.push(Message {
+                                        self.add_message(Message {
                                             role: Role::User,
                                             content: vec![
                                                 ContentItem::ToolResult {
@@ -180,17 +180,17 @@ impl Chat {
                                                     content: tool_result_message,
                                                 }
                                             ]
-                                        });
+                                        }).await?;
                                    } else if name == "execute" {
                                         let statement = match Self::extract_string_field(input, "statement") {
                                             Ok(cmd) => cmd,
                                             Err(e) => {
-                                                self.messages.push(Message {
+                                                self.add_message(Message {
                                                     role: Role::Assistant,
                                                     content: vec![
                                                         ContentItem::Text { text: e }
                                                     ]
-                                                });
+                                                }).await?;
                                                 return Ok(());
                                             }
                                         };
@@ -204,7 +204,7 @@ impl Chat {
                                         let stdout = String::from_utf8_lossy(&output.stdout);
                                         let stderr = String::from_utf8_lossy(&output.stderr);
                                         let tool_result_message = format!("Stdout:\n{}\nStderr:\n{}", stdout, stderr);
-                                        self.messages.push(Message {
+                                        self.add_message(Message {
                                             role: Role::User,
                                             content: vec![
                                                 ContentItem::ToolResult {
@@ -212,16 +212,16 @@ impl Chat {
                                                     content: tool_result_message,
                                                 }
                                             ]
-                                        });
+                                        }).await?;
                                    }
                                 },
                                 Err(e) => {
-                                    self.messages.push(Message {
+                                    self.add_message(Message {
                                         role: Role::Assistant,
                                         content: vec![
                                             ContentItem::Text { text: format!("Error getting git root: {}", e) }
                                         ]
-                                    });
+                                    }).await?;
                                     return Ok(());
                                 }
                             };
