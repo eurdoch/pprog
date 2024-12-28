@@ -3,7 +3,6 @@ use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use std::env;
 use crate::{config::ProjectConfig, tooler::Tooler};
-use log::{debug, info};
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -126,7 +125,6 @@ impl Inference {
     }
 
     pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<AnthropicResponse, anyhow::Error> {
-        debug!("Query_anthropic enter");
         let api_key = env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
         let system = system_message.unwrap_or("").to_string();
 
