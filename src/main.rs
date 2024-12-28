@@ -3,6 +3,7 @@ mod chat;
 mod tree;
 mod tooler;
 mod config;
+mod server;
 
 use std::fs::OpenOptions;
 
@@ -26,9 +27,6 @@ impl Drop for TerminalGuard {
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    //#[arg(short, long)]
-    //force: bool,
-
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -39,6 +37,13 @@ enum Commands {
     Init,
     #[command(about = "Open chat window")]
     Chat,
+    #[command(about = "Start the API server")]
+    Serve {
+        #[arg(short, long, default_value = "127.0.0.1")]
+        host: String,
+        #[arg(short, long, default_value = "8080")]
+        port: u16,
+    },
 }
 
 fn setup_logger() -> Result<(), anyhow::Error> {
@@ -59,7 +64,6 @@ fn setup_logger() -> Result<(), anyhow::Error> {
     builder
         .target(Target::Pipe(Box::new(file)))
         .format_timestamp_secs()
-        // Add explicit level filter
         .filter_level(log::LevelFilter::Info)
         .init();
 
@@ -100,8 +104,6 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                     chat.scroll_up();
                 }
                 KeyCode::PageDown => {
-                    // The max_scroll value is calculated inside render(),
-                    // so we pass a large number and let render() handle the bounds
                     chat.scroll_down(usize::MAX);
                 }
                 KeyCode::Backspace => {
@@ -152,15 +154,16 @@ cmon.toml
 "#)?;
 
                 println!("Init successful.");
-
             }
         }
         Some(Commands::Chat) => {
             if let Err(e) = run_chat().await {
-                // Ensure we clean up even on error
                 terminal::disable_raw_mode()?;
                 return Err(e);
             }
+        }
+        Some(Commands::Serve { host, port }) => {
+            server::start_server(host.clone(), *port).await?;
         }
         None => {
             let mut cmd = Cli::command();
@@ -170,4 +173,3 @@ cmon.toml
 
     Ok(())
 }
-
