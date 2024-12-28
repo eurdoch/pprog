@@ -53,9 +53,62 @@ impl ChatUI {
             .ok_or_else(|| format!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
     }
 
+    fn calculate_message_height(&self, message: &Message, max_width: usize) -> usize {
+        let mut total_lines = 0;
+        let prefix = if message.role == "user" { "You: " } else { "Bot: " };
+        let prefix_width = UnicodeSegmentation::graphemes(prefix, true).count();
+        
+        for content_item in message.content.iter() {
+            match content_item {
+                ContentItem::Text { text } | ContentItem::ToolResult { content: text, .. } => {
+                    let wrap_width = max_width.saturating_sub(prefix_width);
+                    let options = Options::new(wrap_width)
+                        .break_words(true)
+                        .word_splitter(textwrap::WordSplitter::NoHyphenation);
+                    
+                    for paragraph in text.split('\n') {
+                        if !paragraph.trim().is_empty() {
+                            total_lines += wrap(paragraph.trim(), options.clone()).len();
+                        }
+                    }
+                },
+                ContentItem::ToolUse { id, name, .. } => {
+                    let tool_text = format!("Tool use {} - {}", id, name);
+                    let wrap_width = max_width.saturating_sub(prefix_width);
+                    let options = Options::new(wrap_width)
+                        .break_words(true)
+                        .word_splitter(textwrap::WordSplitter::NoHyphenation);
+                    
+                    total_lines += wrap(&tool_text, options).len();
+                }
+            }
+        }
+        total_lines
+    }
+
+    fn auto_scroll(&mut self) -> io::Result<()> {
+        let (width, height) = crossterm::terminal::size()?;
+        let max_width = width as usize;
+        let visible_height = height.saturating_sub(2) as usize;
+
+        // Calculate total lines needed for all messages
+        let mut total_lines = 0;
+        for message in &self.messages {
+            total_lines += self.calculate_message_height(message, max_width);
+        }
+
+        // If total lines exceed visible height, auto-scroll to show latest messages
+        if total_lines > visible_height {
+            self.scroll_offset = total_lines.saturating_sub(visible_height);
+        }
+        
+        Ok(())
+    }
+
     pub fn add_message(&mut self, message: Message) -> Pin<Box<dyn Future<Output = Result<(), anyhow::Error>> + '_>> {
         Box::pin(async move {
             self.messages.push(message.clone());
+            self.auto_scroll()?;  // Auto-scroll after adding new message
             self.render()?;
 
             match message.role {
@@ -331,43 +384,27 @@ Stderr:
         let mut total_lines = 0;
 
         for message in self.messages.iter() {
-            let is_user = message.role == "user";
-            let prefix = if is_user { "You: " } else { "Bot: " };
-            let prefix_width = UnicodeSegmentation::graphemes(prefix, true).count();
-            
-            for content_item in message.content.iter() {
-                match content_item {
-                    ContentItem::Text { text } | ContentItem::ToolResult { content: text, .. } => {
-                        let wrap_width = max_width.saturating_sub(prefix_width);
-                        let options = Options::new(wrap_width)
-                            .break_words(true)
-                            .word_splitter(textwrap::WordSplitter::NoHyphenation);
-                        
-                        for paragraph in text.split('\n') {
-                            if !paragraph.trim().is_empty() {
-                                total_lines += wrap(paragraph.trim(), options.clone()).len();
-                            }
-                        }
-                    },
-                    ContentItem::ToolUse { id, name, .. } => {
-                        let tool_text = format!("Tool use {} - {}", id, name);
-                        let wrap_width = max_width.saturating_sub(prefix_width);
-                        let options = Options::new(wrap_width)
-                            .break_words(true)
-                            .word_splitter(textwrap::WordSplitter::NoHyphenation);
-                        
-                        total_lines += wrap(&tool_text, options).len();
-                    }
-                }
-            }
+            total_lines += self.calculate_message_height(message, max_width);
         }
 
         let max_scroll = total_lines.saturating_sub(visible_height);
         let effective_scroll = std::cmp::min(self.scroll_offset, max_scroll);
-        let lines_to_skip = effective_scroll;
+        let mut lines_skipped = 0;
+        let mut message_index = 0;
 
-        // Render messages
-        for message in self.messages.iter().skip(lines_to_skip) {
+        // Skip messages until we reach the correct scroll position
+        while lines_skipped < effective_scroll && message_index < self.messages.len() {
+            let message_height = self.calculate_message_height(&self.messages[message_index], max_width);
+            if lines_skipped + message_height <= effective_scroll {
+                lines_skipped += message_height;
+                message_index += 1;
+            } else {
+                break;
+            }
+        }
+
+        // Render messages starting from the correct position
+        for message in self.messages.iter().skip(message_index) {
             if current_line >= visible_height as u16 {
                 break;
             }
@@ -384,8 +421,12 @@ Stderr:
 
             for content_item in &message.content {
                 match content_item {
-                    ContentItem::Text { text } | ContentItem::ToolResult { content: text, .. } => {
+                    ContentItem::Text { text } => {
                         Self::write_wrapped_text(&mut stdout, text, prefix_width, max_width, &mut current_line)?;
+                    },
+                    ContentItem::ToolResult { tool_use_id, .. } => {
+                        let text = format!("Tool Result - {}", tool_use_id);
+                        Self::write_wrapped_text(&mut stdout, &text, prefix_width, max_width, &mut current_line)?;
                     },
                     ContentItem::ToolUse { id, name, .. } => {
                         let tool_text = format!("Tool use {} - {}", id, name);
