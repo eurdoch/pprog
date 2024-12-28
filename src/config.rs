@@ -27,32 +27,32 @@ impl ProjectConfig {
         let root_path = match GitTree::get_git_root() {
             Ok(root) => root,
             Err(e) => {
-                info!("Unable to determine Git root directory: {}", e);
+                println!("Unable to determine Git root directory: {}", e);
                 std::process::exit(1);
             }
         };
 
         // Check for Rust project (Cargo.toml)
         if root_path.join("Cargo.toml").exists() {
-            info!("Detected Rust project");
+            println!("Detected Rust project");
             return String::from("cargo check");
         }
         
-        // TODO should run code through node after tsc and check for errors
-        // Check for TypeScript project (tsconfig.json)
+        // TODO if Typescript project should look through package.json first for any kind of build
+        // command and then default to running typescript compiler -> node {result of tsc}
         if root_path.join("tsconfig.json").exists() {
-            info!("Detected TypeScript project");
+            println!("Detected TypeScript project");
             return String::from("tsc --noEmit");
         }
         
         // Check for Java project (gradlew)
         if root_path.join("gradlew").exists() {
-            info!("Detected Java project");
+            println!("Detected Java project");
             return String::from("./gradlew check");
         }
         
         if root_path.join("package.json").exists() {
-            info!("Detected Node.js project");
+            println!("Detected Node.js project");
             let package_json = std::fs::read_to_string(root_path.join("package.json")).unwrap_or_default();
             let package_data: serde_json::Value = serde_json::from_str(&package_json).unwrap_or_default();
             if let Some(main) = package_data.get("main").and_then(|v| v.as_str().map(String::from)) {
@@ -60,9 +60,10 @@ impl ProjectConfig {
             }
         }
 
-        info!("Unable to detect project type");
+        println!("Unable to detect project type");
         String::new()
     }
+
 
     pub fn config_path() -> Result<PathBuf, String> {
         GitTree::get_git_root()
@@ -91,10 +92,16 @@ impl ProjectConfig {
     }
 
     pub fn init() -> Result<(), Box<dyn std::error::Error>> {
-        let config_dir = Path::new(".");
+        let config_dir = match GitTree::get_git_root() {
+            Ok(d) => d,
+            Err(_) => {
+                eprintln!("Could not find git root, please make sure git is initialized.");
+                std::process::exit(1);
+            }
+
+        };
         let config_file = config_dir.join("cmon.toml");
         if config_file.exists() {
-            info!("Project already initialized");
             return Err("Project already initialized".into());
         }
 

@@ -130,6 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
+                println!("Adding config to .gitignore.");
                 let gitignore_path = git_root.join(".gitignore");
                 let mut gitignore = std::fs::OpenOptions::new()
                     .write(true)
