@@ -115,7 +115,6 @@ impl Inference {
         let config = match ProjectConfig::load() {
             Ok(config) => config,
             Err(_) => {
-                info!("Could not find config, defaulting to model claude-3-5-latest");
                 ProjectConfig::default()
             }
         };
@@ -132,7 +131,6 @@ impl Inference {
         let system = system_message.unwrap_or("").to_string();
 
         let tools = self.tooler.get_tools_json()?;
-        log::info!("{:#?}", tools);
 
         let request = AnthropicRequest {
             model: &self.model,
