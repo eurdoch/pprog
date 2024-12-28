@@ -31,12 +31,12 @@ impl ChatUI {
     }
 
     pub fn scroll_up(&mut self) {
-        if self.scroll_offset > 0 {
-            self.scroll_offset -= 1;
-        }
+        // Changed to single line scroll
+        self.scroll_offset = self.scroll_offset.saturating_sub(1);
     }
 
     pub fn scroll_down(&mut self, max_scroll: usize) {
+        // Changed to single line scroll
         if self.scroll_offset < max_scroll {
             self.scroll_offset += 1;
         }
@@ -380,9 +380,8 @@ Stderr:
         let mut current_line: u16 = 0;
         let visible_height = max_height.saturating_sub(2);
 
-        // Calculate what messages to show based on scroll position
+        // Calculate total lines for all messages
         let mut total_lines = 0;
-
         for message in self.messages.iter() {
             total_lines += self.calculate_message_height(message, max_width);
         }
