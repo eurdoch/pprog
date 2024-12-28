@@ -13,6 +13,7 @@ use crate::{inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
 pub struct ChatUI {
     pub messages: Vec<Message>,
     pub input_buffer: String,
+    scroll_offset: usize,
     inference: Inference,
 }
 
@@ -25,6 +26,19 @@ impl ChatUI {
             messages: Vec::new(),
             input_buffer: String::new(),
             inference: Inference::new(),
+            scroll_offset: 0, 
+        }
+    }
+
+    pub fn scroll_up(&mut self) {
+        if self.scroll_offset > 0 {
+            self.scroll_offset -= 1;
+        }
+    }
+
+    pub fn scroll_down(&mut self, max_scroll: usize) {
+        if self.scroll_offset < max_scroll {
+            self.scroll_offset += 1;
         }
     }
 
@@ -271,20 +285,30 @@ Stderr:
         text: &str,
         prefix_width: usize,
         max_width: usize,
+        current_line: &mut u16,
     ) -> io::Result<()> {
         let wrap_width = max_width.saturating_sub(prefix_width);
         let options = Options::new(wrap_width)
             .break_words(true)
             .word_splitter(textwrap::WordSplitter::NoHyphenation);
         
-        let wrapped_lines = wrap(text, options);
+        // Split text into paragraphs and handle each separately
+        let paragraphs: Vec<&str> = text.split("\n").collect();
+        let mut first_line = true;
         
-        for (i, line) in wrapped_lines.iter().enumerate() {
-            if i > 0 {
-                writer.queue(cursor::MoveToNextLine(1))?;
-                writer.queue(Print(" ".repeat(prefix_width)))?;
+        for paragraph in paragraphs {
+            if !paragraph.trim().is_empty() {
+                let wrapped_lines = wrap(paragraph.trim(), options.clone());
+                
+                for line in wrapped_lines {
+                    if !first_line {
+                        writer.queue(cursor::MoveTo(prefix_width as u16, *current_line))?;
+                    }
+                    writer.queue(Print(&line))?;
+                    first_line = false;
+                    *current_line += 1;
+                }
             }
-            writer.queue(Print(line))?;
         }
         
         Ok(())
@@ -293,97 +317,99 @@ Stderr:
     pub fn render(&self) -> io::Result<()> {
         let mut stdout = io::stdout();
         
-        // Get current terminal dimensions
         let (width, height) = crossterm::terminal::size().unwrap_or((80, 24));
         let max_width = width as usize;
         let max_height = height as usize;
         
-        // Clear screen and move to top
         stdout.queue(Clear(ClearType::All))?;
         stdout.queue(cursor::MoveTo(0, 0))?;
 
-        // Calculate total lines needed for all messages
+        let mut current_line: u16 = 0;
+        let visible_height = max_height.saturating_sub(2);
+
+        // Calculate what messages to show based on scroll position
         let mut total_lines = 0;
-        let messages_with_lines: Vec<(usize, &Message)> = self.messages.iter().map(|message| {
-            let mut message_lines = 0;
+
+        for message in self.messages.iter() {
+            let is_user = message.role == "user";
+            let prefix = if is_user { "You: " } else { "Bot: " };
+            let prefix_width = UnicodeSegmentation::graphemes(prefix, true).count();
             
-            // Count lines for each content item
-            for content_item in &message.content {
-                let text = match content_item {
-                    ContentItem::Text { text } => text,
-                    ContentItem::ToolResult { content, .. } => {
-                        message_lines += 1; // Account for the tool result header
-                        content
+            for content_item in message.content.iter() {
+                match content_item {
+                    ContentItem::Text { text } | ContentItem::ToolResult { content: text, .. } => {
+                        let wrap_width = max_width.saturating_sub(prefix_width);
+                        let options = Options::new(wrap_width)
+                            .break_words(true)
+                            .word_splitter(textwrap::WordSplitter::NoHyphenation);
+                        
+                        for paragraph in text.split('\n') {
+                            if !paragraph.trim().is_empty() {
+                                total_lines += wrap(paragraph.trim(), options.clone()).len();
+                            }
+                        }
                     },
-                    ContentItem::ToolUse { .. } => {
-                        message_lines += 1; // Account for the tool use header
-                        continue;
+                    ContentItem::ToolUse { id, name, .. } => {
+                        let tool_text = format!("Tool use {} - {}", id, name);
+                        let wrap_width = max_width.saturating_sub(prefix_width);
+                        let options = Options::new(wrap_width)
+                            .break_words(true)
+                            .word_splitter(textwrap::WordSplitter::NoHyphenation);
+                        
+                        total_lines += wrap(&tool_text, options).len();
                     }
-                };
-                
-                // Calculate wrapped lines for the text
-                let prefix_width = 5; // "You: " or "Bot: "
-                let wrap_width = max_width.saturating_sub(prefix_width);
-                let options = Options::new(wrap_width)
-                    .break_words(true)
-                    .word_splitter(textwrap::WordSplitter::NoHyphenation);
-                
-                message_lines += wrap(text, options).len();
+                }
             }
-            
-            message_lines += 1; // Account for the newline after each message
-            total_lines += message_lines;
-            (message_lines, message)
-        }).collect();
-
-        // Calculate how many messages we can show
-        // Reserve 2 lines for input prompt
-        let available_lines = max_height.saturating_sub(2);
-        let mut lines_to_show = 0;
-        let mut start_index = messages_with_lines.len();
-
-        // Find the starting message that will fit in the available space
-        for (msg_lines, _) in messages_with_lines.iter().rev() {
-            if lines_to_show + msg_lines > available_lines {
-                break;
-            }
-            lines_to_show += msg_lines;
-            start_index -= 1;
         }
 
-        // Render only the messages that fit
-        let mut current_line = 0;
-        for (msg_lines, message) in messages_with_lines.iter().skip(start_index) {
+        let max_scroll = total_lines.saturating_sub(visible_height);
+        let effective_scroll = std::cmp::min(self.scroll_offset, max_scroll);
+        let lines_to_skip = effective_scroll;
+
+        // Render messages
+        for message in self.messages.iter().skip(lines_to_skip) {
+            if current_line >= visible_height as u16 {
+                break;
+            }
+
             let is_user = message.role == "user";
             let color = if is_user { Color::Green } else { Color::Blue };
             let prefix = if is_user { "You: " } else { "Bot: " };
             let prefix_width = UnicodeSegmentation::graphemes(prefix, true).count();
-            
-            stdout.queue(cursor::MoveTo(0, current_line as u16))?;
+
+            stdout.queue(cursor::MoveTo(0, current_line))?;
             stdout.queue(SetForegroundColor(color))?;
             stdout.queue(Print(prefix))?;
             stdout.queue(ResetColor)?;
 
             for content_item in &message.content {
                 match content_item {
-                    ContentItem::Text { text } => {
-                        Self::write_wrapped_text(&mut stdout, text, prefix_width, max_width)?;
-                    },
-                    ContentItem::ToolResult { tool_use_id, .. } => {
-                        let result_text = format!("Tool result - {}", tool_use_id);
-                        Self::write_wrapped_text(&mut stdout, &result_text, prefix_width, max_width)?;
+                    ContentItem::Text { text } | ContentItem::ToolResult { content: text, .. } => {
+                        Self::write_wrapped_text(&mut stdout, text, prefix_width, max_width, &mut current_line)?;
                     },
                     ContentItem::ToolUse { id, name, .. } => {
-                        let result_text = format!("Tool use {} - {}", id, name);
-                        Self::write_wrapped_text(&mut stdout, &result_text, prefix_width, max_width)?;
+                        let tool_text = format!("Tool use {} - {}", id, name);
+                        Self::write_wrapped_text(&mut stdout, &tool_text, prefix_width, max_width, &mut current_line)?;
                     }
                 }
             }
-            
-            current_line += *msg_lines as u16;
         }
 
-        // Render input prompt at the bottom
+        // Render scroll indicators
+        if effective_scroll > 0 {
+            stdout.queue(cursor::MoveTo(width - 1, 0))?
+                .queue(SetForegroundColor(Color::DarkGrey))?
+                .queue(Print("↑"))?
+                .queue(ResetColor)?;
+        }
+        if effective_scroll < max_scroll {
+            stdout.queue(cursor::MoveTo(width - 1, (max_height - 3) as u16))?
+                .queue(SetForegroundColor(Color::DarkGrey))?
+                .queue(Print("↓"))?
+                .queue(ResetColor)?;
+        }
+
+        // Render input prompt
         stdout
             .queue(cursor::MoveTo(0, (max_height - 1) as u16))?
             .queue(SetForegroundColor(Color::Yellow))?

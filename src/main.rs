@@ -96,7 +96,14 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                         chat.add_message(new_message).await?;
                     }
                 }
-
+                KeyCode::PageUp => {
+                    chat.scroll_up();
+                }
+                KeyCode::PageDown => {
+                    // The max_scroll value is calculated inside render(),
+                    // so we pass a large number and let render() handle the bounds
+                    chat.scroll_down(usize::MAX);
+                }
                 KeyCode::Backspace => {
                     chat.input_buffer.pop();
                 }
