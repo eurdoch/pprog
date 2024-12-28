@@ -1,3 +1,7 @@
 /target
 .cmonk.log
 TODO
+
+# cmon config
+cmon.toml
+
