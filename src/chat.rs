@@ -10,40 +10,21 @@ use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
 use crate::{inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
 
-pub struct ChatUI {
+// Core chat functionality separated from UI
+pub struct Chat {
     pub messages: Vec<Message>,
-    pub input_buffer: String,
-    scroll_offset: usize,
     inference: Inference,
 }
 
-impl ChatUI {
+impl Chat {
     pub fn new() -> Self {
-        // Enable raw mode when creating the UI
-        enable_raw_mode().unwrap();
-
         Self {
             messages: Vec::new(),
-            input_buffer: String::new(),
             inference: Inference::new(),
-            scroll_offset: 0, 
-        }
-    }
-
-    pub fn scroll_up(&mut self) {
-        // Changed to single line scroll
-        self.scroll_offset = self.scroll_offset.saturating_sub(1);
-    }
-
-    pub fn scroll_down(&mut self, max_scroll: usize) {
-        // Changed to single line scroll
-        if self.scroll_offset < max_scroll {
-            self.scroll_offset += 1;
         }
     }
 
     fn extract_string_field<'a>(
-        &self,
         input: &'a serde_json::Value,
         field_name: &str
     ) -> Result<&'a str, String> {
@@ -51,6 +32,236 @@ impl ChatUI {
             .ok_or_else(|| format!("Missing '{}' field in tool input: {:?}", field_name, input))?
             .as_str()
             .ok_or_else(|| format!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
+    }
+
+    pub async fn add_message(&mut self, message: Message) -> Result<(), anyhow::Error> {
+        self.messages.push(message.clone());
+
+        match message.role {
+            Role::User => {
+                let tree_string = GitTree::get_tree()?;
+                let system_message = format!(
+                    r#"
+                    You are a coding assistant working on a project.
+                    
+                    File tree structure:
+                    {}
+
+                    The user will give you instructions on how to change the project code.
+
+                    If you use tool 'write_file' successfully and tool 'compile_check' is available, call compile_check.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
+
+                    Never make any changes outside of the project's root directory.
+                    "#,
+                    &tree_string,
+                );
+                let response = self.inference.query_anthropic(self.messages.clone(), Some(&system_message)).await?;
+
+                for content_item in &response.content {
+                    match content_item {
+                        ContentItem::Text { text, .. } => {
+                            let new_message = Message {
+                                role: Role::Assistant,
+                                content: vec![
+                                    ContentItem::Text { text: text.to_string() }
+                                ]
+                            };
+                            self.messages.push(new_message);
+                        }
+                        ContentItem::ToolUse { name, input, id, .. } => {
+                            self.messages.push(Message {
+                                role: Role::Assistant,
+                                content: vec![
+                                    ContentItem::ToolUse { 
+                                        id: id.to_string(), 
+                                        name: name.to_string(), 
+                                        input: input.clone(),
+                                    }
+                                ]
+                            });
+
+                            match GitTree::get_git_root() {
+                                Ok(root_path) => {
+                                    if name == "write_file" {
+                                        let content = match Self::extract_string_field(input, "content") {
+                                            Ok(content) => content,
+                                            Err(error_msg) => {
+                                                self.messages.push(Message {
+                                                    role: Role::Assistant,
+                                                    content: vec![
+                                                        ContentItem::Text { text: error_msg }
+                                                    ]
+                                                });
+                                                return Ok(());
+                                            }
+                                        };
+                                        let file_path = match Self::extract_string_field(input, "path") {
+                                            Ok(content) => content,
+                                            Err(error_msg) => {
+                                                self.messages.push(Message {
+                                                    role: Role::Assistant,
+                                                    content: vec![
+                                                        ContentItem::Text { text: error_msg }
+                                                    ]
+                                                });
+                                                return Ok(());
+                                            }
+                                        };
+
+                                        let full_path = root_path.join(file_path);
+                                        let tool_result_message = match std::fs::write(full_path.clone(), content) {
+                                            Ok(_) => format!("Successfully wrote content to file {:?}.", full_path), 
+                                            Err(e) => format!("Error writing to file {:?}: {:?}.", full_path, e), 
+                                        };
+                                        self.messages.push(Message {
+                                            role: Role::User,
+                                            content: vec![
+                                                ContentItem::ToolResult { 
+                                                    tool_use_id: id.to_string(), 
+                                                    content: tool_result_message,
+                                                }
+                                            ]
+                                        });
+                                    } else if name == "read_file" {
+                                        let file_path = match Self::extract_string_field(input, "path") {
+                                            Ok(content) => content,
+                                            Err(error_msg) => {
+                                                self.messages.push(Message {
+                                                    role: Role::Assistant,
+                                                    content: vec![
+                                                        ContentItem::Text { text: error_msg }
+                                                    ]
+                                                });
+                                                return Ok(());
+                                            }
+                                        };
+                                        let full_path = root_path.join(file_path);
+                                        let tool_result_message = match std::fs::read_to_string(full_path.clone()) {
+                                            Ok(file_content) => file_content,
+                                            Err(e) => format!("Error reading file {:?}: {:?}.", full_path, e),
+                                        };
+                                        self.messages.push(Message {
+                                            role: Role::User,
+                                            content: vec![
+                                                ContentItem::ToolResult { 
+                                                    tool_use_id: id.to_string(), 
+                                                    content: tool_result_message,
+                                                }
+                                            ]
+                                        });
+                                    } else if name == "compile_check" {
+                                        let check_cmd = match Self::extract_string_field(input, "cmd") {
+                                            Ok(cmd) => cmd,
+                                            Err(e) => {
+                                                self.messages.push(Message {
+                                                    role: Role::Assistant,
+                                                    content: vec![
+                                                        ContentItem::Text { text: e }
+                                                    ]
+                                                });
+                                                return Ok(());
+                                            }
+                                        };
+                                        let output = Command::new("bash")
+                                            .arg("-c")
+                                            .arg(format!("{} & sleep 1; kill $!", check_cmd))
+                                            .current_dir(root_path)
+                                            .output()
+                                            .expect("Failed to execute command");
+
+                                        let stdout = String::from_utf8_lossy(&output.stdout);
+                                        let stderr = String::from_utf8_lossy(&output.stderr);
+                                        let tool_result_message = format!("Stdout:\n{}\nStderr:\n{}", stdout, stderr);
+                                        self.messages.push(Message {
+                                            role: Role::User,
+                                            content: vec![
+                                                ContentItem::ToolResult {
+                                                    tool_use_id: id.to_string(),
+                                                    content: tool_result_message,
+                                                }
+                                            ]
+                                        });
+                                   } else if name == "execute" {
+                                        let statement = match Self::extract_string_field(input, "statement") {
+                                            Ok(cmd) => cmd,
+                                            Err(e) => {
+                                                self.messages.push(Message {
+                                                    role: Role::Assistant,
+                                                    content: vec![
+                                                        ContentItem::Text { text: e }
+                                                    ]
+                                                });
+                                                return Ok(());
+                                            }
+                                        };
+                                        let output = Command::new("bash")
+                                            .arg("-c")
+                                            .arg(statement)
+                                            .current_dir(root_path)
+                                            .output()
+                                            .expect("Failed to execute command");
+
+                                        let stdout = String::from_utf8_lossy(&output.stdout);
+                                        let stderr = String::from_utf8_lossy(&output.stderr);
+                                        let tool_result_message = format!("Stdout:\n{}\nStderr:\n{}", stdout, stderr);
+                                        self.messages.push(Message {
+                                            role: Role::User,
+                                            content: vec![
+                                                ContentItem::ToolResult {
+                                                    tool_use_id: id.to_string(),
+                                                    content: tool_result_message,
+                                                }
+                                            ]
+                                        });
+                                   }
+                                },
+                                Err(e) => {
+                                    self.messages.push(Message {
+                                        role: Role::Assistant,
+                                        content: vec![
+                                            ContentItem::Text { text: format!("Error getting git root: {}", e) }
+                                        ]
+                                    });
+                                    return Ok(());
+                                }
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+            },
+            Role::Assistant => {},
+        }
+        Ok(())
+    }
+}
+
+// UI Component that uses the Chat functionality
+pub struct ChatUI {
+    pub chat: Chat,
+    pub input_buffer: String,
+    scroll_offset: usize,
+}
+
+impl ChatUI {
+    pub fn new() -> Self {
+        enable_raw_mode().unwrap();
+
+        Self {
+            chat: Chat::new(),
+            input_buffer: String::new(),
+            scroll_offset: 0, 
+        }
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(1);
+    }
+
+    pub fn scroll_down(&mut self, max_scroll: usize) {
+        if self.scroll_offset < max_scroll {
+            self.scroll_offset += 1;
+        }
     }
 
     fn calculate_message_height(&self, message: &Message, max_width: usize) -> usize {
@@ -91,13 +302,11 @@ impl ChatUI {
         let max_width = width as usize;
         let visible_height = height.saturating_sub(2) as usize;
 
-        // Calculate total lines needed for all messages
         let mut total_lines = 0;
-        for message in &self.messages {
+        for message in &self.chat.messages {
             total_lines += self.calculate_message_height(message, max_width);
         }
 
-        // If total lines exceed visible height, auto-scroll to show latest messages
         if total_lines > visible_height {
             self.scroll_offset = total_lines.saturating_sub(visible_height);
         }
@@ -107,216 +316,10 @@ impl ChatUI {
 
     pub fn add_message(&mut self, message: Message) -> Pin<Box<dyn Future<Output = Result<(), anyhow::Error>> + '_>> {
         Box::pin(async move {
-            self.messages.push(message.clone());
-            self.auto_scroll()?;  // Auto-scroll after adding new message
+            self.chat.add_message(message).await?;
+            self.auto_scroll()?;
             self.render()?;
-
-            match message.role {
-                Role::User => {
-                    let tree_string = GitTree::get_tree()?;
-                    // TODO this should be moved to Inference structure
-                    let system_message = format!(
-                        r#"
-                        You are a coding assistant working on a project.
-                        
-                        File tree structure:
-                        {}
-
-                        The user will give you instructions on how to change the project code.
-
-                        If you use tool 'write_file' successfully and tool 'compile_check' is available, call compile_check.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
-
-                        Never make any changes outside of the project's root directory.
-                        "#,
-                        &tree_string,
-                    );
-                    let response = self.inference.query_anthropic(self.messages.clone(), Some(&system_message)).await?;
-
-                    for content_item in &response.content {
-                        match content_item {
-                            ContentItem::Text { text, .. } => {
-                                let new_message = Message {
-                                    role: Role::Assistant,
-                                    content: vec![
-                                        ContentItem::Text { text: text.to_string() }
-                                    ]
-                                };
-                                self.add_message(new_message).await?;
-                            }
-                            ContentItem::ToolUse { name, input, id, .. } => {
-                                self.add_message(Message {
-                                    role: Role::Assistant,
-                                    content: vec![
-                                        ContentItem::ToolUse { 
-                                            id: id.to_string(), 
-                                            name: name.to_string(), 
-                                            input: input.clone(),
-                                        }
-                                    ]
-                                }).await?;
-
-                                match GitTree::get_git_root() {
-                                    Ok(root_path) => {
-                                        if name == "write_file" {
-                                            let content = match self.extract_string_field(input, "content") {
-                                                Ok(content) => content,
-                                                Err(error_msg) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: error_msg }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
-                                            let file_path = match self.extract_string_field(input, "path") {
-                                                Ok(content) => content,
-                                                Err(error_msg) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: error_msg }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
-
-                                            let full_path = root_path.join(file_path);
-                                            let tool_result_message = match std::fs::write(full_path.clone(), content) {
-                                                Ok(_) => format!("Successfully wrote content to file {:?}.", full_path), 
-                                                Err(e) => format!("Error writing to file {:?}: {:?}.", full_path, e), 
-                                            };
-                                            self.add_message(Message {
-                                                role: Role::User,
-                                                content: vec![
-                                                    ContentItem::ToolResult { 
-                                                        tool_use_id: id.to_string(), 
-                                                        content: tool_result_message,
-                                                    }
-                                                ]
-                                            }).await?;
-                                            // TODO do compile check and if errors or warnings make
-                                            // another call
-                                        } else if name == "read_file" {
-                                            let file_path = match self.extract_string_field(input, "path") {
-                                                Ok(content) => content,
-                                                Err(error_msg) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: error_msg }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
-                                            let full_path = root_path.join(file_path);
-                                            let tool_result_message = match std::fs::read_to_string(full_path.clone()) {
-                                                Ok(file_content) => file_content,
-                                                Err(e) => format!("Error reading file {:?}: {:?}.", full_path, e),
-                                            };
-                                            self.add_message(Message {
-                                                role: Role::User,
-                                                content: vec![
-                                                    ContentItem::ToolResult { 
-                                                        tool_use_id: id.to_string(), 
-                                                        content: tool_result_message,
-                                                    }
-                                                ]
-                                            }).await?;
-                                        } else if name == "compile_check" {
-                                            let check_cmd = match self.extract_string_field(input, "cmd") {
-                                                Ok(cmd) => cmd,
-                                                Err(e) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: e }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
-                                            let output = Command::new("bash")
-                                                .arg("-c")
-                                                .arg(format!("{} & sleep 1; kill $!", check_cmd))  // Run command in background, wait 1 sec, then kill it
-                                                .current_dir(root_path)
-                                                .output()
-                                                .expect("Failed to execute command");
-
-                                            let stdout = String::from_utf8_lossy(&output.stdout);
-                                            let stderr = String::from_utf8_lossy(&output.stderr);
-                                            let tool_result_message = format!("Stdout:
-{}
-Stderr:
-{}", stdout, stderr);
-                                            self.add_message(Message {
-                                                role: Role::User,
-                                                content: vec![
-                                                    ContentItem::ToolResult {
-                                                        tool_use_id: id.to_string(),
-                                                        content: tool_result_message,
-                                                    }
-                                                ]
-                                            }).await?;
-                                       } else if name == "execute" {
-                                            let statement = match self.extract_string_field(input, "statement") {
-                                                Ok(cmd) => cmd,
-                                                Err(e) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: e }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
-                                            let output = Command::new("bash")
-                                                .arg("-c")
-                                                .arg(statement)
-                                                .current_dir(root_path)
-                                                .output()
-                                                .expect("Failed to execute command");
-
-                                            let stdout = String::from_utf8_lossy(&output.stdout);
-                                            let stderr = String::from_utf8_lossy(&output.stderr);
-                                            let tool_result_message = format!("Stdout:
-{}
-Stderr:
-{}", stdout, stderr);
-                                            self.add_message(Message {
-                                                role: Role::User,
-                                                content: vec![
-                                                    ContentItem::ToolResult {
-                                                        tool_use_id: id.to_string(),
-                                                        content: tool_result_message,
-                                                    }
-                                                ]
-                                            }).await?;
-                                       }
-                                    },
-
-                                    Err(e) => {
-                                        self.add_message(Message {
-                                            role: Role::Assistant,
-                                            content: vec![
-                                                ContentItem::Text { text: format!("Error getting git root: {}", e) }
-                                            ]
-                                        }).await?;
-                                        return Ok(());
-                                    }
-                                };
-                            }
-                            _ => {}
-                        }
-                    }
-                    Ok(())
-                },
-                Role::Assistant => Ok(()),
-            }
+            Ok(())
         })
     }
 
@@ -345,7 +348,6 @@ Stderr:
             .break_words(true)
             .word_splitter(textwrap::WordSplitter::NoHyphenation);
         
-        // Split text into paragraphs and handle each separately
         let paragraphs: Vec<&str> = text.split("\n").collect();
         let mut first_line = true;
         
@@ -380,9 +382,8 @@ Stderr:
         let mut current_line: u16 = 0;
         let visible_height = max_height.saturating_sub(2);
 
-        // Calculate total lines for all messages
         let mut total_lines = 0;
-        for message in self.messages.iter() {
+        for message in self.chat.messages.iter() {
             total_lines += self.calculate_message_height(message, max_width);
         }
 
@@ -391,9 +392,8 @@ Stderr:
         let mut lines_skipped = 0;
         let mut message_index = 0;
 
-        // Skip messages until we reach the correct scroll position
-        while lines_skipped < effective_scroll && message_index < self.messages.len() {
-            let message_height = self.calculate_message_height(&self.messages[message_index], max_width);
+        while lines_skipped < effective_scroll && message_index < self.chat.messages.len() {
+            let message_height = self.calculate_message_height(&self.chat.messages[message_index], max_width);
             if lines_skipped + message_height <= effective_scroll {
                 lines_skipped += message_height;
                 message_index += 1;
@@ -402,8 +402,7 @@ Stderr:
             }
         }
 
-        // Render messages starting from the correct position
-        for message in self.messages.iter().skip(message_index) {
+        for message in self.chat.messages.iter().skip(message_index) {
             if current_line >= visible_height as u16 {
                 break;
             }
@@ -435,7 +434,6 @@ Stderr:
             }
         }
 
-        // Render scroll indicators
         if effective_scroll > 0 {
             stdout.queue(cursor::MoveTo(width - 1, 0))?
                 .queue(SetForegroundColor(Color::DarkGrey))?
@@ -449,7 +447,6 @@ Stderr:
                 .queue(ResetColor)?;
         }
 
-        // Render input prompt
         stdout
             .queue(cursor::MoveTo(0, (max_height - 1) as u16))?
             .queue(SetForegroundColor(Color::Yellow))?
