@@ -1,10 +1,27 @@
 import { useState, useRef, useEffect } from 'react'
 import './App.css'
 
+interface Text {
+  type: "text",
+  text: string,
+}
+
+interface ToolUse {
+  type: "tool_use",
+  id: string,
+  name: string,
+  input: object,
+}
+
+interface ToolResult {
+  type: "tool_result",
+  tool_use_id: string,
+  content: string,
+}
+
 interface Message {
-  id: number;
-  text: string;
-  sender: 'user' | 'bot';
+  role: "user" | "assistant",
+  content: (Text | ToolUse | ToolResult)[],
 }
 
 function App() {
@@ -25,9 +42,10 @@ function App() {
 
     // Add user message
     const userMessage: Message = {
-      id: messages.length,
-      text: inputMessage,
-      sender: 'user'
+      role: "user",
+      content: [
+        { type: "text", "text": inputMessage.trim() }
+      ]
     };
 
     setMessages(prevMessages => [...prevMessages, userMessage]);
@@ -40,7 +58,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: inputMessage })
+        body: JSON.stringify({ message: userMessage })
       });
 
       if (!response.ok) {
@@ -49,34 +67,42 @@ function App() {
 
       const data = await response.json();
 
-      // Add bot response
-      const botMessage: Message = {
-        id: messages.length + 1,
-        text: data.response,
-        sender: 'bot'
-      };
+      console.log(data);
+      for (let contentItem of data.message.content) {
+        switch(contentItem.type) {
+            case "text":
+              const newMessage: Message = {
+                role: data.message.role,
+                content: [contentItem],
+              };
+              setMessages(prevMessages => [
+                ...prevMessages,
+                newMessage,
+              ]);
+              break;
+            case "tool_use":
+              break;
+            case "tool_result":
+              break;
+            default:
+              break;
+        }
+      }
 
-      setMessages(prevMessages => [...prevMessages, botMessage]);
     } catch (error) {
       console.error('Error:', error);
-      const errorMessage: Message = {
-        id: messages.length + 1,
-        text: 'Sorry, there was an error processing your message.',
-        sender: 'bot'
-      };
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
     }
   };
 
   return (
     <div className="chat-container">
       <div className="chat-messages" style={{  }}>
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <div 
-            key={message.id} 
-            className={`message ${message.sender === 'user' ? 'user-message' : 'bot-message'}`}
+            key={index} 
+            className={`message ${message.role === 'user' ? 'user-message' : 'bot-message'}`}
           >
-            {message.text}
+            {message.content[0].text}
           </div>
         ))}
         <div ref={messagesEndRef} />
