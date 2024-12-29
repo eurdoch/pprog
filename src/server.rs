@@ -1,16 +1,18 @@
 use actix_web::{web, App, HttpResponse, HttpServer, Responder, get, HttpRequest};
+use actix_cors::Cors;
 use serde::{Deserialize, Serialize};
 use crate::chat::Chat;
 use crate::inference::{Message, Role, ContentItem};
 use std::sync::Mutex;
 use include_dir::{include_dir, Dir};
 use mime_guess::from_path;
+use actix_web::http;
 
 static FRONTEND_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/frontend/dist");
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
-    message: String,
+    message: Message,
 }
 
 #[derive(Serialize, Clone)]
@@ -28,28 +30,76 @@ async fn chat_handler(
 ) -> impl Responder {
     let mut _chat = data.chat.lock().unwrap();
 
-    let user_message = Message {
-        role: Role::User,
-        content: vec![ContentItem::Text { text: req.message.clone() }]
-    };
-
-    _chat.messages.push(user_message.clone());
-    match _chat.send_message(user_message).await {
-        Ok(response_option) => {
-            if let Some(response) = response_option {
-                let ai_message = Message {
-                    role: Role::Assistant,
-                    content: response.content.clone()
-                };
-                
-                return HttpResponse::Ok().json(ChatResponse {
-                    message: ai_message,
-                })
-            } else {
-                return HttpResponse::InternalServerError().body(format!("NetworkError"))
+    // TODO start over, assume only one content item
+    match &req.message.content[0] {
+        // Normal text query from user
+        ContentItem::Text { .. } => {
+            let new_msg = Message {
+                role: Role::User,
+                content: vec![req.message.content[0].clone()]
+            };
+            _chat.messages.push(new_msg.clone());
+            match _chat.send_message(new_msg).await {
+                Ok(response) => {
+                    let ai_message = Message {
+                        role: Role::Assistant,
+                        content: response.content.clone()
+                    };
+                    _chat.messages.push(ai_message.clone());
+                        
+                    return HttpResponse::Ok().json(ChatResponse {
+                        message: ai_message,
+                    })
+                },
+                Err(e) => return HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("Error: {}", e)
+                }))
             }
         },
-        Err(e) => HttpResponse::InternalServerError().body(format!("Error: {}", e))
+        // A user has received tool use msg and immediately returned to get result
+        ContentItem::ToolUse { id, .. } => {
+            match _chat.handle_tool_use(&req.message.content[0]).await {
+                Ok(tool_result_content) => {
+                    let message = Message {
+                        role: Role::User,
+                        content: vec![ContentItem::ToolResult {
+                            tool_use_id: id.to_string(),
+                            content: tool_result_content,
+                        }],
+                    };
+                    return HttpResponse::Ok().json(ChatResponse {
+                        message
+                    })
+                },
+                Err(e) => {
+                    return HttpResponse::InternalServerError().json(serde_json::json!({
+                        "error": format!("Error: {}", e)
+                    }))
+                }
+            }
+        },
+        ContentItem::ToolResult { .. } => {
+            let msg = Message {
+                role: Role::User,
+                content: vec![req.message.content[0].clone()]
+            };
+            match _chat.send_message(msg).await {
+                Ok(response) => {
+                    let ai_message = Message {
+                        role: Role::Assistant,
+                        content: response.content.clone()
+                    };
+                    _chat.messages.push(ai_message.clone());
+                        
+                    return HttpResponse::Ok().json(ChatResponse {
+                        message: ai_message,
+                    })
+                },
+                Err(e) => return HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("Error: {}", e)
+                }))
+            }
+        },
     }
 }
 
@@ -95,7 +145,20 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     println!("Starting server on {}:{}", host, port);
 
     HttpServer::new(move || {
+        let cors = Cors::default()
+            .allowed_origin("http://localhost:5173")  // React Vite default dev server
+            .allowed_origin("http://127.0.0.1:5173")
+            .allowed_methods(vec!["GET", "POST", "OPTIONS"])
+            .allowed_headers(vec![
+                http::header::AUTHORIZATION, 
+                http::header::ACCEPT, 
+                http::header::CONTENT_TYPE
+            ])
+            .supports_credentials()
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)
             .app_data(app_state.clone())
             .route("/chat", web::post().to(chat_handler))
             .route("/history", web::get().to(get_chat_history))
