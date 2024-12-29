@@ -64,6 +64,7 @@ body {
 .chat-input {
   display: flex;
   padding: 10px;
+  gap: 10px;
   background-color: #f8f9fa;
   border-top: 1px solid #e9ecef;
 }
@@ -73,7 +74,6 @@ body {
   padding: 10px;
   border: 1px solid #ced4da;
   border-radius: 4px;
-  margin-right: 10px;
 }
 
 .chat-input button {

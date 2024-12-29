@@ -106,6 +106,28 @@ function App() {
     }
   };
 
+  const handleClearChat = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/clear', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      console.log(response);
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      // Clear local messages state
+      setMessages([]);
+
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+    }
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-messages" style={{  }}>
@@ -140,10 +162,10 @@ function App() {
           placeholder="Type your message..."
         />
         <button onClick={handleEnterMessage}>Send</button>
+        <button onClick={handleClearChat}>Clear Chat</button>
       </div>
     </div>
   );
 }
 
 export default App;
-
