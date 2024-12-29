@@ -51,16 +51,6 @@ pub enum Role {
     Assistant,
 }
 
-// TODO possibly delete
-impl PartialEq<&str> for Role {
-    fn eq(&self, other: &&str) -> bool {
-        match self {
-            Role::User => other.eq_ignore_ascii_case(&"user"),
-            Role::Assistant => other.eq_ignore_ascii_case(&"assistant"),
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
 pub struct TextContent {
     #[serde(rename = "type")]
@@ -82,7 +72,6 @@ pub struct ToolResultContent {
     #[serde(rename = "type")]
     pub content_type: String,
     pub tool_use_id: String,
-    // TODO this will change eventually to be String | Content
     pub content: String,
 }
 
@@ -109,8 +98,8 @@ pub struct Inference {
     tooler: Tooler,
 }
 
-impl Inference {
-    pub fn new() -> Self {
+impl std::default::Default for Inference {
+    fn default() -> Self {
         let config = match ProjectConfig::load() {
             Ok(config) => config,
             Err(_) => {
@@ -122,6 +111,39 @@ impl Inference {
             client: Client::new(),
             tooler: Tooler::new(),
         }
+    }
+}
+
+impl Inference {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub async fn generate_response(&self, user_message: &str) -> Result<String, anyhow::Error> {
+        // Create a message with text for querying
+        let message = Message {
+            role: Role::User,
+            content: vec![ContentItem::Text { 
+                text: user_message.to_string() 
+            }]
+        };
+
+        // Use async query_anthropic method
+        let anthropic_response = self.query_anthropic(vec![message], None).await?;
+        
+        // Extract the text from the first content item
+        let response_text = anthropic_response.content
+            .iter()
+            .find_map(|item| {
+                if let ContentItem::Text { text } = item {
+                    Some(text.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| "No response found".to_string());
+
+        Ok(response_text)
     }
 
     pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<AnthropicResponse, anyhow::Error> {
@@ -149,11 +171,10 @@ impl Inference {
             .text()
             .await?;
 
-        // TODO for errors add different type tha tcan be returned to chat display error
+        // TODO for errors add different type that can be returned to chat display error
         log::info!("Network response text: {}", response);
 
         let res: AnthropicResponse = serde_json::from_str(&response)?;
         Ok(res)
     }
 }
-

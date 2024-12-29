@@ -12,7 +12,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use config::ProjectConfig;
 use crossterm::{event::{self, Event, KeyCode}, terminal};
 use env_logger::{Builder, Target};
-use inference::{ContentItem, Message, Role};
+use inference::{ContentItem, Message, Role, Inference};
 use tree::GitTree;
 use std::io::Write;
 
@@ -41,7 +41,7 @@ enum Commands {
     Serve {
         #[arg(short, long, default_value = "127.0.0.1")]
         host: String,
-        #[arg(short, long, default_value = "8080")]
+        #[arg(short, long, default_value_t = 8080)]
         port: u16,
     },
 }
@@ -163,7 +163,8 @@ cmon.toml
             }
         }
         Some(Commands::Serve { host, port }) => {
-            server::start_server(host.clone(), *port).await?;
+            let inference = Inference::default();  // Changed from .new() to .default()
+            server::start_server(inference, host.clone(), *port).await?;
         }
         None => {
             let mut cmd = Cli::command();

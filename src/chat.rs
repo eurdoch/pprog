@@ -152,7 +152,7 @@ impl ChatUI {
 
     fn calculate_message_height(&self, message: &Message, max_width: usize) -> usize {
         let mut total_lines = 0;
-        let prefix = if message.role == "user" { "You: " } else { "Bot: " };
+        let prefix = if message.role == Role::User { "You: " } else { "Bot: " };
         let prefix_width = UnicodeSegmentation::graphemes(prefix, true).count();
         
         for content_item in message.content.iter() {
@@ -325,7 +325,7 @@ impl ChatUI {
                 break;
             }
 
-            let is_user = message.role == "user";
+            let is_user = message.role == Role::User;
             let color = if is_user { Color::Green } else { Color::Blue };
             let prefix = if is_user { "You: " } else { "Bot: " };
             let prefix_width = UnicodeSegmentation::graphemes(prefix, true).count();
