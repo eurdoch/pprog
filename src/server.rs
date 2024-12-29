@@ -1,15 +1,18 @@
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder, get, HttpRequest};
 use serde::{Deserialize, Serialize};
 use crate::chat::Chat;
 use crate::inference::{Message, Role, ContentItem};
 use std::sync::Mutex;
+use include_dir::{include_dir, Dir};
+use mime_guess::from_path;
+
+static FRONTEND_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/frontend/dist");
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
     message: String,
 }
 
-// Modify to include full AnthropicResponse
 #[derive(Serialize, Clone)]
 pub struct ChatResponse {
     message: Message,
@@ -25,7 +28,6 @@ async fn chat_handler(
 ) -> impl Responder {
     let mut _chat = data.chat.lock().unwrap();
 
-    // Create user message with full content
     let user_message = Message {
         role: Role::User,
         content: vec![ContentItem::Text { text: req.message.clone() }]
@@ -59,6 +61,32 @@ async fn get_chat_history(
     HttpResponse::Ok().json(chat.messages.clone())
 }
 
+#[get("/{filename:.*}")]
+async fn index(req: HttpRequest) -> impl Responder {
+    let path = req.match_info().query("filename").to_string();
+    let path = if path.is_empty() { "index.html".to_string() } else { path };
+
+    // Try to get the file from the embedded directory
+    if let Some(file) = FRONTEND_DIR.get_file(&path) {
+        // Guess the mime type
+        let mime_type = from_path(&path).first_or_octet_stream();
+        
+        return HttpResponse::Ok()
+            .content_type(mime_type.as_ref())
+            .body(file.contents());
+    }
+
+    // If file not found, serve index.html for client-side routing
+    if let Some(index_file) = FRONTEND_DIR.get_file("index.html") {
+        HttpResponse::Ok()
+            .content_type("text/html")
+            .body(index_file.contents())
+    } else {
+        HttpResponse::InternalServerError()
+            .body("index.html not found in embedded files")
+    }
+}
+
 pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     let app_state = web::Data::new(AppState {
         chat: Mutex::new(Chat::new()),
@@ -71,6 +99,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
             .app_data(app_state.clone())
             .route("/chat", web::post().to(chat_handler))
             .route("/history", web::get().to(get_chat_history))
+            .service(index)
     })
     .bind(format!("{}:{}", host, port))?
     .run()

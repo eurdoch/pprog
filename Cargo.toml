@@ -21,10 +21,13 @@ env_logger = "0.10"
 config = "0.15.4"
 toml = "0.8.19"
 dirs = "5.0.1"
+include_dir = "0.7"
+mime_guess = "2.0"
 
 # Actix web dependencies
 actix-web = "4.4"
 actix-rt = "2.9"
+actix-files = "0.6.2"
 futures = "0.3"
 
 [dev-dependencies]
