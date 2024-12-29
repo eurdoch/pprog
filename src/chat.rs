@@ -35,9 +35,7 @@ impl Chat {
             .ok_or_else(|| anyhow::anyhow!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
     }
 
-    pub async fn add_message(&mut self, message: Message) -> Result<Option<AnthropicResponse>, anyhow::Error> {
-        self.messages.push(message.clone());
-
+    pub async fn send_message(&mut self, message: Message) -> Result<Option<AnthropicResponse>, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;
             let system_message = format!(
@@ -61,10 +59,10 @@ impl Chat {
         Ok(None)
     }
 
-    // Helper function to process tool usage and return results
+    // TODO should refactor to Tooler struct
     pub async fn handle_tool_use(&mut self, content_item: &ContentItem) -> Result<String, anyhow::Error> {
         match content_item {
-            ContentItem::ToolUse { name, input, id, .. } => {
+            ContentItem::ToolUse { name, input, .. } => {
                 match GitTree::get_git_root() {
                     Ok(root_path) => {
                         let tool_result = match name.as_str() {
@@ -113,17 +111,6 @@ impl Chat {
                             },
                             _ => format!("Unknown tool: {}", name)
                         };
-
-                        // Add the tool result to chat history
-                        self.messages.push(Message {
-                            role: Role::User,
-                            content: vec![
-                                ContentItem::ToolResult {
-                                    tool_use_id: id.to_string(),
-                                    content: tool_result.clone(),
-                                }
-                            ]
-                        });
 
                         Ok(tool_result)
                     },
@@ -222,38 +209,35 @@ impl ChatUI {
         Ok(())
     }
 
+    // TODO should probablyu remove parameter and use state within Chat structure
     pub async fn process_message(&mut self, message: Message) -> Result<(), anyhow::Error> {
-        // Add initial message and get response
-        if let Some(response) = self.chat.add_message(message).await? {
-            // Process each content item in the response
+        self.chat.messages.push(message.clone());
+        self.render()?;
+        
+        if let Some(response) = self.chat.send_message(message).await? {
+            self.chat.messages.push(Message {
+                role: Role::Assistant,
+                content: response.content.clone(),
+            });
+            self.render()?;
+            
             for content_item in response.content {
-                match content_item {
-                    ContentItem::Text { text } => {
-                        // Add assistant's text response to chat
-                        self.chat.add_message(Message {
-                            role: Role::Assistant,
-                            content: vec![ContentItem::Text { text }]
-                        }).await?;
-                    },
-                    ContentItem::ToolUse { .. } => {
-                        // Add tool use message to chat
-                        self.chat.add_message(Message {
-                            role: Role::Assistant,
-                            content: vec![content_item.clone()]
-                        }).await?;
-
-                        // Process the tool use and get result
-                        let _ = self.chat.handle_tool_use(&content_item).await?;
-                    },
-                    ContentItem::ToolResult { .. } => {
-                        // Tool results are handled in handle_tool_use, so we can ignore them here
-                    }
+                if let ContentItem::ToolUse { ref id, .. } = content_item {
+                    let tool_result_content = self.chat.handle_tool_use(&content_item).await?;
+                    let future = Box::pin(self.process_message(Message {
+                        role: Role::User,
+                        content: vec![ContentItem::ToolResult { 
+                            tool_use_id: id.clone(), 
+                            content: tool_result_content 
+                        }],
+                    }));
+                    future.await?;
                 }
             }
         }
-
-        self.auto_scroll()?;
+        
         self.render()?;
+        self.auto_scroll()?;
         Ok(())
     }
 
@@ -303,7 +287,7 @@ impl ChatUI {
         Ok(())
     }
 
-    pub fn render(&self) -> io::Result<()> {
+    pub fn render(&mut self) -> io::Result<()> {
         let mut stdout = io::stdout();
         
         let (width, height) = crossterm::terminal::size().unwrap_or((80, 24));

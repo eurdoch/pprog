@@ -67,7 +67,7 @@ async fn handle_chat(
         }],
     };
 
-    match chat.add_message(user_message).await {
+    match chat.send_message(user_message).await {
         Ok(_) => {
             let response = ChatResponse {
                 messages: chat.messages.clone(),

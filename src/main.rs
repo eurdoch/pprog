@@ -74,47 +74,47 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
     terminal::enable_raw_mode()?;
     let _guard = TerminalGuard;  
     
-    let mut chat = ChatUI::new();
-    chat.render()?;
+    let mut chat_ui = ChatUI::new();
+    chat_ui.render()?;
 
     loop {
         if let Event::Key(key_event) = event::read()? {
             match key_event.code {
                 KeyCode::Esc => {
-                    chat.cleanup()?;
+                    chat_ui.cleanup()?;
                     break;
                 }
                 KeyCode::Enter => {
-                    if !chat.input_buffer.is_empty() {
-                        if chat.input_buffer == "/exit" {
-                            chat.cleanup()?;
+                    if !chat_ui.input_buffer.is_empty() {
+                        if chat_ui.input_buffer == "/exit" {
+                            chat_ui.cleanup()?;
                             break;
                         }
-                        let user_input = std::mem::take(&mut chat.input_buffer);
+                        let user_input = std::mem::take(&mut chat_ui.input_buffer);
                         let new_message = Message {
                             role: Role::User,
                             content: vec![
                                 ContentItem::Text { text: user_input } 
                             ]
                         };
-                        chat.process_message(new_message).await?;
+                        chat_ui.process_message(new_message).await?;
                     }
                 }
                 KeyCode::PageUp => {
-                    chat.scroll_up();
+                    chat_ui.scroll_up();
                 }
                 KeyCode::PageDown => {
-                    chat.scroll_down(usize::MAX);
+                    chat_ui.scroll_down(usize::MAX);
                 }
                 KeyCode::Backspace => {
-                    chat.input_buffer.pop();
+                    chat_ui.input_buffer.pop();
                 }
                 KeyCode::Char(c) => {
-                    chat.input_buffer.push(c);
+                    chat_ui.input_buffer.push(c);
                 }
                 _ => {}
             }
-            chat.render()?;
+            chat_ui.render()?;
         }
     }
 
