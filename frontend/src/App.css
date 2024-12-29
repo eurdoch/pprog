@@ -40,18 +40,25 @@ body {
   word-wrap: break-word;
 }
 
-.user-message {
+.user-msg {
   align-self: flex-end;
   background-color: #007bff;
   color: white;
   margin-left: auto;
 }
 
-.bot-message {
+.bot-msg {
   align-self: flex-start;
   background-color: #e9ecef;
   color: black;
   margin-right: auto;
+}
+
+.tool-msg {
+  align-self: center;
+  background-color: lightgreen;
+  color: black;
+  font-style: italic;
 }
 
 .chat-input {

@@ -114,10 +114,23 @@ function App() {
         {messages.map((message, index) => (
           <div 
             key={index} 
-            className={`message ${message.role === 'user' ? 'user-message' : 'bot-message'}`}
+            className={`message ${message.content[0].type === "tool_use" ? "tool-msg" : message.role === "user" ? "user-msg" : "bot-msg"}`}
           >
-            {message.content[0].text}
+            {
+              (() => {
+                switch (message.content[0].type) {
+                  case "text":
+                    return message.content[0].text;
+                  case "tool_use":
+                    return "Using tool: " + message.content[0].name;
+                  default:
+                    return null;
+                }
+              })()
+            }
           </div>
+
+
         ))}
         <div ref={messagesEndRef} />
       </div>
