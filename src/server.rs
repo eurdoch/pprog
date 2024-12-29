@@ -29,6 +29,7 @@ async fn chat_handler(
     req: web::Json<ChatRequest>
 ) -> impl Responder {
     let mut _chat = data.chat.lock().unwrap();
+    println!("{:#?}", _chat.messages);
 
     // TODO start over, assume only one content item
     match &req.message.content[0] {
@@ -83,6 +84,7 @@ async fn chat_handler(
                 role: Role::User,
                 content: vec![req.message.content[0].clone()]
             };
+            _chat.messages.push(msg.clone());
             match _chat.send_message(msg).await {
                 Ok(response) => {
                     let ai_message = Message {
