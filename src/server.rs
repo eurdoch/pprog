@@ -112,6 +112,19 @@ async fn get_chat_history(
     HttpResponse::Ok().json(chat.messages.clone())
 }
 
+async fn clear_chat_history(
+    data: web::Data<AppState>
+) -> impl Responder {
+    let mut chat = data.chat.lock().unwrap();
+    
+    // Clear the messages vector
+    chat.messages.clear();
+    
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "Chat history cleared"
+    }))
+}
+
 #[get("/{filename:.*}")]
 async fn index(req: HttpRequest) -> impl Responder {
     let path = req.match_info().query("filename").to_string();
@@ -163,6 +176,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
             .app_data(app_state.clone())
             .route("/chat", web::post().to(chat_handler))
             .route("/history", web::get().to(get_chat_history))
+            .route("/clear", web::post().to(clear_chat_history))
             .service(index)
     })
     .bind(format!("{}:{}", host, port))?
