@@ -37,7 +37,7 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async () => {
+  const handleEnterMessage = async (_e: any) => {
     if (inputMessage.trim() === '') return;
 
     // Add user message
@@ -47,9 +47,13 @@ function App() {
         { type: "text", "text": inputMessage.trim() }
       ]
     };
-
-    setMessages(prevMessages => [...prevMessages, userMessage]);
     setInputMessage('');
+
+    handleSendMessage(userMessage);
+  }
+
+  const handleSendMessage = async (message: Message) => {
+    setMessages(prevMessages => [...prevMessages, message]);
 
     try {
       // Send message to backend
@@ -58,34 +62,44 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: userMessage })
+        body: JSON.stringify({ message: message })
       });
 
+      console.log(response);
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
 
       const data = await response.json();
 
-      console.log(data);
       for (let contentItem of data.message.content) {
         switch(contentItem.type) {
-            case "text":
-              const newMessage: Message = {
+          case "text":
+            setMessages(prevMessages => [
+              ...prevMessages,
+              {
                 role: data.message.role,
                 content: [contentItem],
-              };
-              setMessages(prevMessages => [
-                ...prevMessages,
-                newMessage,
-              ]);
-              break;
-            case "tool_use":
-              break;
-            case "tool_result":
-              break;
-            default:
-              break;
+              },
+            ]);
+            break;
+          // Received tool, immediately send back to handle too use on backend
+          case "tool_use":
+            console.log(contentItem);
+            await handleSendMessage({
+              role: "assistant",
+              content: [contentItem],
+            });
+            break;
+          case "tool_result":
+            console.log(contentItem);
+            await handleSendMessage({
+              role: "user",
+              content: [contentItem]
+            });
+            break;
+          default:
+            break;
         }
       }
 
@@ -112,10 +126,10 @@ function App() {
           type="text" 
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+          onKeyPress={(e) => e.key === 'Enter' && handleEnterMessage(e)}
           placeholder="Type your message..."
         />
-        <button onClick={handleSendMessage}>Send</button>
+        <button onClick={handleEnterMessage}>Send</button>
       </div>
     </div>
   );
