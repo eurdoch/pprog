@@ -12,7 +12,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use config::ProjectConfig;
 use crossterm::{event::{self, Event, KeyCode}, terminal};
 use env_logger::{Builder, Target};
-use inference::{ContentItem, Message, Role, Inference};
+use inference::{ContentItem, Message, Role};
 use tree::GitTree;
 use std::io::Write;
 
@@ -163,8 +163,7 @@ cmon.toml
             }
         }
         Some(Commands::Serve { host, port }) => {
-            let inference = Inference::default();  // Changed from .new() to .default()
-            server::start_server(inference, host.clone(), *port).await?;
+            server::start_server(host.clone(), *port).await?;
         }
         None => {
             let mut cmd = Cli::command();

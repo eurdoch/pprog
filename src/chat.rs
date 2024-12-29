@@ -35,6 +35,7 @@ impl Chat {
             .ok_or_else(|| anyhow::anyhow!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
     }
 
+    // TODO get rid of message parameter and just use existingb messages
     pub async fn send_message(&mut self, message: Message) -> Result<Option<AnthropicResponse>, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;

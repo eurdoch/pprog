@@ -4,20 +4,6 @@ use serde::{Serialize, Deserialize};
 use std::env;
 use crate::{config::ProjectConfig, tooler::Tooler};
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-pub struct AnthropicResponse {
-    pub content: Vec<ContentItem>,
-    pub id: String,
-    pub model: String,
-    pub role: String,
-    #[serde(rename = "type")]
-    pub message_type: String,
-    pub stop_reason: String,
-    pub stop_sequence: Option<String>,
-    pub usage: Usage,
-}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(tag = "type")]
 pub enum ContentItem {
@@ -52,35 +38,25 @@ pub enum Role {
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
-pub struct TextContent {
-    #[serde(rename = "type")]
-    pub content_type: String,
-    pub text: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
-pub struct ToolUseContent {
-    #[serde(rename = "type")]
-    pub content_type: String,
-    pub id: String,
-    pub name: String,
-    pub input: serde_json::Value,
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
-pub struct ToolResultContent {
-    #[serde(rename = "type")]
-    pub content_type: String,
-    pub tool_use_id: String,
-    pub content: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
 pub struct Usage {
     pub input_tokens: i32,
     pub cache_creation_input_tokens: i32,
     pub cache_read_input_tokens: i32,
     pub output_tokens: i32,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct AnthropicResponse {
+    pub content: Vec<ContentItem>,
+    pub id: String,
+    pub model: String,
+    pub role: String,
+    #[serde(rename = "type")]
+    pub message_type: String,
+    pub stop_reason: String,
+    pub stop_sequence: Option<String>,
+    pub usage: Usage,
 }
 
 #[derive(Serialize)]
@@ -117,33 +93,6 @@ impl std::default::Default for Inference {
 impl Inference {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub async fn generate_response(&self, user_message: &str) -> Result<String, anyhow::Error> {
-        // Create a message with text for querying
-        let message = Message {
-            role: Role::User,
-            content: vec![ContentItem::Text { 
-                text: user_message.to_string() 
-            }]
-        };
-
-        // Use async query_anthropic method
-        let anthropic_response = self.query_anthropic(vec![message], None).await?;
-        
-        // Extract the text from the first content item
-        let response_text = anthropic_response.content
-            .iter()
-            .find_map(|item| {
-                if let ContentItem::Text { text } = item {
-                    Some(text.clone())
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| "No response found".to_string());
-
-        Ok(response_text)
     }
 
     pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<AnthropicResponse, anyhow::Error> {
