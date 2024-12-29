@@ -29,7 +29,6 @@ async fn chat_handler(
     req: web::Json<ChatRequest>
 ) -> impl Responder {
     let mut _chat = data.chat.lock().unwrap();
-    println!("{:#?}", _chat.messages);
 
     // TODO start over, assume only one content item
     match &req.message.content[0] {
