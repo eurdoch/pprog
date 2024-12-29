@@ -36,7 +36,7 @@ impl Chat {
     }
 
     // TODO get rid of message parameter and just use existingb messages
-    pub async fn send_message(&mut self, message: Message) -> Result<Option<AnthropicResponse>, anyhow::Error> {
+    pub async fn send_message(&mut self, message: Message) -> Result<AnthropicResponse, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;
             let system_message = format!(
@@ -55,10 +55,12 @@ impl Chat {
                 &tree_string,
             );
             let response = self.inference.query_anthropic(self.messages.clone(), Some(&system_message)).await?;
-            return Ok(Some(response));
+            Ok(response)
+        } else {
+            Err(anyhow::anyhow!("Can only send messages with user role when querying model."))
         }
-        Ok(None)
     }
+
 
     // TODO should refactor to Tooler struct
     pub async fn handle_tool_use(&mut self, content_item: &ContentItem) -> Result<String, anyhow::Error> {
@@ -215,25 +217,24 @@ impl ChatUI {
         self.chat.messages.push(message.clone());
         self.render()?;
         
-        if let Some(response) = self.chat.send_message(message).await? {
-            self.chat.messages.push(Message {
-                role: Role::Assistant,
-                content: response.content.clone(),
-            });
-            self.render()?;
-            
-            for content_item in response.content {
-                if let ContentItem::ToolUse { ref id, .. } = content_item {
-                    let tool_result_content = self.chat.handle_tool_use(&content_item).await?;
-                    let future = Box::pin(self.process_message(Message {
-                        role: Role::User,
-                        content: vec![ContentItem::ToolResult { 
-                            tool_use_id: id.clone(), 
-                            content: tool_result_content 
-                        }],
-                    }));
-                    future.await?;
-                }
+        let response = self.chat.send_message(message).await?; 
+        self.chat.messages.push(Message {
+            role: Role::Assistant,
+            content: response.content.clone(),
+        });
+        self.render()?;
+        
+        for content_item in response.content {
+            if let ContentItem::ToolUse { ref id, .. } = content_item {
+                let tool_result_content = self.chat.handle_tool_use(&content_item).await?;
+                let future = Box::pin(self.process_message(Message {
+                    role: Role::User,
+                    content: vec![ContentItem::ToolResult { 
+                        tool_use_id: id.clone(), 
+                        content: tool_result_content 
+                    }],
+                }));
+                future.await?;
             }
         }
         
