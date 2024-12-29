@@ -97,7 +97,7 @@ async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
                                 ContentItem::Text { text: user_input } 
                             ]
                         };
-                        chat.add_message(new_message).await?;
+                        chat.process_message(new_message).await?;
                     }
                 }
                 KeyCode::PageUp => {

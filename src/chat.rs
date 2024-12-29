@@ -1,4 +1,5 @@
-use std::{future::Future, io::{self, Write}, pin::Pin, process::Command};
+use std::io::{self, Write};
+use std::process::Command;
 use crossterm::{
     cursor,
     execute,
@@ -8,7 +9,7 @@ use crossterm::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
-use crate::{inference::{ContentItem, Inference, Message, Role}, tree::GitTree};
+use crate::{inference::{ContentItem, Inference, Message, Role, AnthropicResponse}, tree::GitTree};
 
 // Core chat functionality separated from UI
 pub struct Chat {
@@ -27,214 +28,110 @@ impl Chat {
     fn extract_string_field<'a>(
         input: &'a serde_json::Value,
         field_name: &str
-    ) -> Result<&'a str, String> {
+    ) -> Result<&'a str, anyhow::Error> {
         input.get(field_name)
-            .ok_or_else(|| format!("Missing '{}' field in tool input: {:?}", field_name, input))?
+            .ok_or_else(|| anyhow::anyhow!("Missing '{}' field in tool input: {:?}", field_name, input))?
             .as_str()
-            .ok_or_else(|| format!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
+            .ok_or_else(|| anyhow::anyhow!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
     }
 
-    pub fn add_message<'a>(&'a mut self, message: Message) -> Pin<Box<dyn Future<Output = Result<(), anyhow::Error>> + 'a>> {
-        Box::pin(async move {
-            self.messages.push(message.clone());
+    pub async fn add_message(&mut self, message: Message) -> Result<Option<AnthropicResponse>, anyhow::Error> {
+        self.messages.push(message.clone());
 
-            match message.role {
-                Role::User => {
-                    let tree_string = GitTree::get_tree()?;
-                    let system_message = format!(
-                        r#"
-                        You are a coding assistant working on a project.
-                        
-                        File tree structure:
-                        {}
+        if message.role == Role::User {
+            let tree_string = GitTree::get_tree()?;
+            let system_message = format!(
+                r#"
+                You are a coding assistant working on a project.
+                
+                File tree structure:
+                {}
 
-                        The user will give you instructions on how to change the project code.
+                The user will give you instructions on how to change the project code.
 
-                        If you use tool 'write_file' successfully and tool 'compile_check' is available, call compile_check.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
+                If you use tool 'write_file' successfully and tool 'compile_check' is available, call compile_check.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
 
-                        Never make any changes outside of the project's root directory.
-                        "#,
-                        &tree_string,
-                    );
-                    let response = self.inference.query_anthropic(self.messages.clone(), Some(&system_message)).await?;
+                Never make any changes outside of the project's root directory.
+                "#,
+                &tree_string,
+            );
+            let response = self.inference.query_anthropic(self.messages.clone(), Some(&system_message)).await?;
+            return Ok(Some(response));
+        }
+        Ok(None)
+    }
 
-                    for content_item in &response.content {
-                        match content_item {
-                            ContentItem::Text { text, .. } => {
-                                let new_message = Message {
-                                    role: Role::Assistant,
-                                    content: vec![
-                                        ContentItem::Text { text: text.to_string() }
-                                    ]
-                                };
-                                self.add_message(new_message).await?;
-                            }
-                            ContentItem::ToolUse { name, input, id, .. } => {
-                                self.add_message(Message {
-                                    role: Role::Assistant,
-                                    content: vec![
-                                        ContentItem::ToolUse { 
-                                            id: id.to_string(), 
-                                            name: name.to_string(), 
-                                            input: input.clone(),
-                                        }
-                                    ]
-                                }).await?;
+    // Helper function to process tool usage and return results
+    pub async fn handle_tool_use(&mut self, content_item: &ContentItem) -> Result<String, anyhow::Error> {
+        match content_item {
+            ContentItem::ToolUse { name, input, id, .. } => {
+                match GitTree::get_git_root() {
+                    Ok(root_path) => {
+                        let tool_result = match name.as_str() {
+                            "write_file" => {
+                                let content = Self::extract_string_field(input, "content")?;
+                                let file_path = Self::extract_string_field(input, "path")?;
+                                let full_path = root_path.join(file_path);
+                                match std::fs::write(full_path.clone(), content) {
+                                    Ok(_) => format!("Successfully wrote content to file {:?}.", full_path),
+                                    Err(e) => format!("Error writing to file {:?}: {:?}.", full_path, e),
+                                }
+                            },
+                            "read_file" => {
+                                let file_path = Self::extract_string_field(input, "path")?;
+                                let full_path = root_path.join(file_path);
+                                match std::fs::read_to_string(full_path.clone()) {
+                                    Ok(file_content) => file_content,
+                                    Err(e) => format!("Error reading file {:?}: {:?}.", full_path, e),
+                                }
+                            },
+                            "compile_check" => {
+                                let check_cmd = Self::extract_string_field(input, "cmd")?;
+                                let output = Command::new("bash")
+                                    .arg("-c")
+                                    .arg(format!("{} & sleep 1; kill $!", check_cmd))
+                                    .current_dir(root_path)
+                                    .output()
+                                    .expect("Failed to execute command");
 
-                                match GitTree::get_git_root() {
-                                    Ok(root_path) => {
-                                        if name == "write_file" {
-                                            let content = match Self::extract_string_field(input, "content") {
-                                                Ok(content) => content,
-                                                Err(error_msg) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: error_msg }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
-                                            let file_path = match Self::extract_string_field(input, "path") {
-                                                Ok(content) => content,
-                                                Err(error_msg) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: error_msg }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
+                                let stdout = String::from_utf8_lossy(&output.stdout);
+                                let stderr = String::from_utf8_lossy(&output.stderr);
+                                format!("Stdout:\n{}\nStderr:\n{}", stdout, stderr)
+                            },
+                            "execute" => {
+                                let statement = Self::extract_string_field(input, "statement")?;
+                                let output = Command::new("bash")
+                                    .arg("-c")
+                                    .arg(statement)
+                                    .current_dir(root_path)
+                                    .output()
+                                    .expect("Failed to execute command");
 
-                                            let full_path = root_path.join(file_path);
-                                            let tool_result_message = match std::fs::write(full_path.clone(), content) {
-                                                Ok(_) => format!("Successfully wrote content to file {:?}.", full_path), 
-                                                Err(e) => format!("Error writing to file {:?}: {:?}.", full_path, e), 
-                                            };
-                                            self.add_message(Message {
-                                                role: Role::User,
-                                                content: vec![
-                                                    ContentItem::ToolResult { 
-                                                        tool_use_id: id.to_string(), 
-                                                        content: tool_result_message,
-                                                    }
-                                                ]
-                                            }).await?;
-                                        } else if name == "read_file" {
-                                            let file_path = match Self::extract_string_field(input, "path") {
-                                                Ok(content) => content,
-                                                Err(error_msg) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: error_msg }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
-                                            let full_path = root_path.join(file_path);
-                                            let tool_result_message = match std::fs::read_to_string(full_path.clone()) {
-                                                Ok(file_content) => file_content,
-                                                Err(e) => format!("Error reading file {:?}: {:?}.", full_path, e),
-                                            };
-                                            self.add_message(Message {
-                                                role: Role::User,
-                                                content: vec![
-                                                    ContentItem::ToolResult { 
-                                                        tool_use_id: id.to_string(), 
-                                                        content: tool_result_message,
-                                                    }
-                                                ]
-                                            }).await?;
-                                        } else if name == "compile_check" {
-                                            let check_cmd = match Self::extract_string_field(input, "cmd") {
-                                                Ok(cmd) => cmd,
-                                                Err(e) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: e }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
-                                            let output = Command::new("bash")
-                                                .arg("-c")
-                                                .arg(format!("{} & sleep 1; kill $!", check_cmd))
-                                                .current_dir(root_path)
-                                                .output()
-                                                .expect("Failed to execute command");
+                                let stdout = String::from_utf8_lossy(&output.stdout);
+                                let stderr = String::from_utf8_lossy(&output.stderr);
+                                format!("Stdout:\n{}\nStderr:\n{}", stdout, stderr)
+                            },
+                            _ => format!("Unknown tool: {}", name)
+                        };
 
-                                            let stdout = String::from_utf8_lossy(&output.stdout);
-                                            let stderr = String::from_utf8_lossy(&output.stderr);
-                                            let tool_result_message = format!("Stdout:\n{}\nStderr:\n{}", stdout, stderr);
-                                            self.add_message(Message {
-                                                role: Role::User,
-                                                content: vec![
-                                                    ContentItem::ToolResult {
-                                                        tool_use_id: id.to_string(),
-                                                        content: tool_result_message,
-                                                    }
-                                                ]
-                                            }).await?;
-                                       } else if name == "execute" {
-                                            let statement = match Self::extract_string_field(input, "statement") {
-                                                Ok(cmd) => cmd,
-                                                Err(e) => {
-                                                    self.add_message(Message {
-                                                        role: Role::Assistant,
-                                                        content: vec![
-                                                            ContentItem::Text { text: e }
-                                                        ]
-                                                    }).await?;
-                                                    return Ok(());
-                                                }
-                                            };
-                                            let output = Command::new("bash")
-                                                .arg("-c")
-                                                .arg(statement)
-                                                .current_dir(root_path)
-                                                .output()
-                                                .expect("Failed to execute command");
+                        // Add the tool result to chat history
+                        self.messages.push(Message {
+                            role: Role::User,
+                            content: vec![
+                                ContentItem::ToolResult {
+                                    tool_use_id: id.to_string(),
+                                    content: tool_result.clone(),
+                                }
+                            ]
+                        });
 
-                                            let stdout = String::from_utf8_lossy(&output.stdout);
-                                            let stderr = String::from_utf8_lossy(&output.stderr);
-                                            let tool_result_message = format!("Stdout:\n{}\nStderr:\n{}", stdout, stderr);
-                                            self.add_message(Message {
-                                                role: Role::User,
-                                                content: vec![
-                                                    ContentItem::ToolResult {
-                                                        tool_use_id: id.to_string(),
-                                                        content: tool_result_message,
-                                                    }
-                                                ]
-                                            }).await?;
-                                       }
-                                    },
-                                    Err(e) => {
-                                        self.add_message(Message {
-                                            role: Role::Assistant,
-                                            content: vec![
-                                                ContentItem::Text { text: format!("Error getting git root: {}", e) }
-                                            ]
-                                        }).await?;
-                                        return Ok(());
-                                    }
-                                };
-                            }
-                            _ => {}
-                        }
-                    }
-                },
-                Role::Assistant => {},
-            }
-            Ok(())
-        })
+                        Ok(tool_result)
+                    },
+                    Err(e) => Err(anyhow::anyhow!("Error getting git root: {}", e))
+                }
+            },
+            _ => Err(anyhow::anyhow!("Not a tool use content item"))
+        }
     }
 }
 
@@ -252,7 +149,7 @@ impl ChatUI {
         Self {
             chat: Chat::new(),
             input_buffer: String::new(),
-            scroll_offset: 0, 
+            scroll_offset: 0,
         }
     }
 
@@ -325,13 +222,39 @@ impl ChatUI {
         Ok(())
     }
 
-    pub fn add_message(&mut self, message: Message) -> Pin<Box<dyn Future<Output = Result<(), anyhow::Error>> + '_>> {
-        Box::pin(async move {
-            self.chat.add_message(message).await?;
-            self.auto_scroll()?;
-            self.render()?;
-            Ok(())
-        })
+    pub async fn process_message(&mut self, message: Message) -> Result<(), anyhow::Error> {
+        // Add initial message and get response
+        if let Some(response) = self.chat.add_message(message).await? {
+            // Process each content item in the response
+            for content_item in response.content {
+                match content_item {
+                    ContentItem::Text { text } => {
+                        // Add assistant's text response to chat
+                        self.chat.add_message(Message {
+                            role: Role::Assistant,
+                            content: vec![ContentItem::Text { text }]
+                        }).await?;
+                    },
+                    ContentItem::ToolUse { .. } => {
+                        // Add tool use message to chat
+                        self.chat.add_message(Message {
+                            role: Role::Assistant,
+                            content: vec![content_item.clone()]
+                        }).await?;
+
+                        // Process the tool use and get result
+                        let _ = self.chat.handle_tool_use(&content_item).await?;
+                    },
+                    ContentItem::ToolResult { .. } => {
+                        // Tool results are handled in handle_tool_use, so we can ignore them here
+                    }
+                }
+            }
+        }
+
+        self.auto_scroll()?;
+        self.render()?;
+        Ok(())
     }
 
     pub fn cleanup(&self) -> io::Result<()> {
