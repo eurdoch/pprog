@@ -40,7 +40,6 @@ function App() {
   const handleEnterMessage = async (_e: any) => {
     if (inputMessage.trim() === '') return;
 
-    // Add user message
     const userMessage: Message = {
       role: "user",
       content: [
@@ -85,14 +84,13 @@ function App() {
             break;
           // Received tool, immediately send back to handle too use on backend
           case "tool_use":
-            console.log(contentItem);
             await handleSendMessage({
               role: "assistant",
               content: [contentItem],
             });
             break;
+          // Received tool result, immediately send back to send to model
           case "tool_result":
-            console.log(contentItem);
             await handleSendMessage({
               role: "user",
               content: [contentItem]
@@ -111,27 +109,26 @@ function App() {
   return (
     <div className="chat-container">
       <div className="chat-messages" style={{  }}>
-        {messages.map((message, index) => (
-          <div 
-            key={index} 
-            className={`message ${message.content[0].type === "tool_use" ? "tool-msg" : message.role === "user" ? "user-msg" : "bot-msg"}`}
-          >
-            {
-              (() => {
-                switch (message.content[0].type) {
-                  case "text":
-                    return message.content[0].text;
-                  case "tool_use":
-                    return "Using tool: " + message.content[0].name;
-                  default:
-                    return null;
-                }
-              })()
+        {messages.map((message, index) => {
+            switch (message.content[0].type) {
+              case "text":
+                return <div
+                  key={index}
+                  className={`message ${message.role === "user" ? "user-msg" : "bot-msg"}`}
+                >
+                  {message.content[0].text}
+                </div>
+              case "tool_use":
+                return <div
+                  key={index}
+                  className="message tool-msg"
+                >
+                  {"Using tool: " + message.content[0].name}
+                </div>
+              default:
+                return null;
             }
-          </div>
-
-
-        ))}
+        })}
         <div ref={messagesEndRef} />
       </div>
       <div className="chat-input">
