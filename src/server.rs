@@ -75,7 +75,6 @@ fn process_files(dir: &Dir, base_path: &str, static_files: &mut HashMap<String, 
     for entry in dir.entries() {
         let relative_path = entry.path().to_string_lossy().replace("\\", "/");
         let full_path = format!("{}/{}", base_path, relative_path);
-        println!("Processing path: {}", full_path); // Add debug logging
 
         if let Some(subdir) = entry.as_dir() {
             process_files(subdir, &full_path, static_files, hbs, template_data);
@@ -94,9 +93,6 @@ fn process_files(dir: &Dir, base_path: &str, static_files: &mut HashMap<String, 
             // Normalize path and ensure it starts with a slash
             let normalized_path = if full_path.starts_with('/') { full_path.clone() } else { format!("/{}", full_path) };
             
-            // Print out the paths being added to static_files
-            println!("Adding static file: {}", normalized_path);
-            
             static_files.insert(normalized_path, contents);
         }
     }
@@ -111,18 +107,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     let mut hbs = Handlebars::new();
     let mut static_files = HashMap::new();
     
-    // Print out the contents of DIST_DIR
-    println!("Entries in DIST_DIR:");
-    for entry in DIST_DIR.entries() {
-        println!("- {:?}", entry.path());
-    }
-
     process_files(&DIST_DIR, "", &mut static_files, &mut hbs, &template_data);
-
-    println!("Processed static files:");
-    for (key, _) in &static_files {
-        println!("- {}", key);
-    }
 
     let app_state = web::Data::new(AppState {
         chat: Mutex::new(Chat::new()),
@@ -162,12 +147,6 @@ async fn index(
     app_data: web::Data<AppState>
 ) -> impl Responder {
     let path = req.match_info().query("filename").to_string();
-
-    // Debug: print out all available static files
-    println!("Available static files:");
-    for (key, _) in &app_data.as_ref().static_files {
-        println!("- {}", key);
-    }
 
     // Handle root path (index.html)
     if path.is_empty() {

@@ -55,14 +55,14 @@ function App() {
     setMessages(prevMessages => [...prevMessages, message]);
 
     try {
-      // Send message to backend
-      const response = await fetch('http://localhost:8080/chat', {
+      const response = await fetch(`${window.SERVER_URL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ message: message })
       });
+      console.log(response);
 
       if (!response.ok) {
         throw new Error('Network response was not ok');
@@ -101,9 +101,6 @@ function App() {
       }
 
     } catch (error: any) {
-      if (error.includes("NetworkError")) {
-        alert("Network Error");
-      }
       console.error('Error:', error);
     }
   };
