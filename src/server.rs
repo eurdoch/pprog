@@ -123,6 +123,7 @@ async fn chat_handler(
                 role: Role::User,
                 content: vec![req.message.content[0].clone()]
             };
+            // Push the message to chat history first
             chat.messages.push(new_msg.clone());
             
             match chat.send_message(new_msg).await {
@@ -138,6 +139,8 @@ async fn chat_handler(
                     })
                 },
                 Err(e) => {
+                    // Pop the message off chat history on error
+                    chat.messages.pop();
                     match e.downcast::<InferenceError>() {
                         Ok(inference_error) => handle_inference_error(inference_error),
                         Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {
@@ -174,6 +177,7 @@ async fn chat_handler(
                 role: Role::User,
                 content: req.message.content.clone(),
             };
+            // Push the message to chat history first
             chat.messages.push(msg.clone());
             
             match chat.send_message(msg).await {
@@ -189,6 +193,8 @@ async fn chat_handler(
                     })
                 },
                 Err(e) => {
+                    // Pop the message off chat history on error
+                    chat.messages.pop();
                     match e.downcast::<InferenceError>() {
                         Ok(inference_error) => handle_inference_error(inference_error),
                         Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {

@@ -91,9 +91,10 @@ function App() {
       });
 
       if (!response.ok) {
+        // TODO fix backend error iwthin error
         const data = await response.json();
-        alert(`${data.error.message}`);
-        throw new Error("");
+        alert(`${data.error.error.message}`);
+        throw new Error(data.error.error.message);
       }
 
       const data = await response.json();
@@ -129,11 +130,6 @@ function App() {
       }
 
     } catch (error: any) {
-      console.error('Error:', error);
-      // If the error wasn't already handled by the response.ok check
-      if (!error.message.startsWith('Error:')) {
-        alert(`Error: ${error.message}`);
-      }
       setIsProcessing(false);
     }
   };
