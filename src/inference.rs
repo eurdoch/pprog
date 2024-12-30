@@ -69,6 +69,14 @@ struct ModelRequest<'a> {
     system: String,
 }
 
+#[derive(Serialize)]
+struct OpenAIRequest {
+    model: String,
+    messages: Vec<serde_json::Value>,
+    max_tokens: Option<u32>,
+    tools: Option<serde_json::Value>,
+}
+
 pub struct Inference {
     model: String,
     client: Client,
@@ -124,6 +132,58 @@ impl Inference {
         // TODO for errors add different type that can be returned to chat display error
         log::info!("Network response text: {}", response);
 
+        let res: ModelResponse = serde_json::from_str(&response)?;
+        Ok(res)
+    }
+
+    pub async fn query_openai(&self, messages: Vec<Message>, base_url: Option<&str>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+        let api_key = env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY environment variable not set");
+        let base_url = base_url.unwrap_or("https://api.openai.com/v1");
+
+        let openai_messages = messages.into_iter().map(|msg| {
+            // Convert content to a single text string for OpenAI
+            let content = msg.content.iter()
+                .filter_map(|item| {
+                    match item {
+                        ContentItem::Text { text } => Some(text.clone()),
+                        _ => None
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            serde_json::json!({
+                "role": match msg.role {
+                    Role::User => "user",
+                    Role::Assistant => "assistant",
+                    Role::System => "system",
+                },
+                "content": content
+            })
+        }).collect();
+
+        let tools = self.tooler.get_tools_json().ok();
+
+        let request = OpenAIRequest {
+            model: self.model.clone(),
+            messages: openai_messages,
+            max_tokens: Some(8096),
+            tools,
+        };
+
+        let response = self.client
+            .post(format!("{}/chat/completions", base_url))
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(&request)
+            .send()
+            .await?
+            .text()
+            .await?;
+
+        log::info!("OpenAI API response text: {}", response);
+
+        // NOTE: You might need to adjust this to match OpenAI's response structure
         let res: ModelResponse = serde_json::from_str(&response)?;
         Ok(res)
     }
