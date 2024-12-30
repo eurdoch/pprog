@@ -91,10 +91,8 @@ function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.log(errorData);
-        //const errorMessage = errorData?.error || response.statusText || 'Network response was not ok';
-        //alert(`Error: ${errorMessage}`);
+        const data = await response.json();
+        alert(`${data.error.message}`);
         throw new Error("");
       }
 

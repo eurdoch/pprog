@@ -5,7 +5,7 @@ use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use crate::chat::Chat;
-use crate::inference::{Message, Role, ContentItem};
+use crate::inference::{Message, Role, ContentItem, InferenceError};
 use std::sync::Mutex;
 use std::collections::HashMap;
 use actix_web::http;
@@ -18,6 +18,13 @@ pub struct ChatRequest {
 #[derive(Serialize, Clone)]
 pub struct ChatResponse {
     message: Message,
+}
+
+#[derive(Serialize)]
+pub struct ErrorResponse {
+    error: String,
+    error_type: String,
+    status_code: u16,
 }
 
 pub struct AppState {
@@ -34,6 +41,46 @@ fn get_mime_type(filename: &str) -> &'static str {
         f if f.ends_with(".js") => "application/javascript; charset=utf-8",
         f if f.ends_with(".svg") => "image/svg+xml",
         _ => "application/octet-stream"
+    }
+}
+
+fn handle_inference_error(error: InferenceError) -> HttpResponse {
+    match error {
+        InferenceError::NetworkError(msg) => {
+            HttpResponse::ServiceUnavailable().json(ErrorResponse {
+                error: msg,
+                error_type: "network_error".to_string(),
+                status_code: 503,
+            })
+        }
+        InferenceError::ApiError(status, msg) => {
+            HttpResponse::build(status).json(ErrorResponse {
+                error: msg,
+                error_type: "api_error".to_string(),
+                status_code: status.as_u16(),
+            })
+        }
+        InferenceError::InvalidResponse(msg) => {
+            HttpResponse::BadGateway().json(ErrorResponse {
+                error: msg,
+                error_type: "invalid_response".to_string(),
+                status_code: 502,
+            })
+        }
+        InferenceError::MissingApiKey(msg) => {
+            HttpResponse::InternalServerError().json(ErrorResponse {
+                error: msg,
+                error_type: "configuration_error".to_string(),
+                status_code: 500,
+            })
+        }
+        InferenceError::SerializationError(msg) => {
+            HttpResponse::InternalServerError().json(ErrorResponse {
+                error: msg,
+                error_type: "serialization_error".to_string(),
+                status_code: 500,
+            })
+        }
     }
 }
 
@@ -58,7 +105,7 @@ async fn chat_handler(
     data: web::Data<AppState>, 
     req: web::Json<ChatRequest>
 ) -> impl Responder {
-    let mut _chat = data.chat.lock().unwrap();
+    let mut chat = data.chat.lock().unwrap();
 
     match &req.message.content[0] {
         ContentItem::Text { .. } => {
@@ -66,26 +113,34 @@ async fn chat_handler(
                 role: Role::User,
                 content: vec![req.message.content[0].clone()]
             };
-            _chat.messages.push(new_msg.clone());
-            match _chat.send_message(new_msg).await {
+            chat.messages.push(new_msg.clone());
+            
+            match chat.send_message(new_msg).await {
                 Ok(response) => {
                     let ai_message = Message {
                         role: Role::Assistant,
                         content: response.content.clone()
                     };
-                    _chat.messages.push(ai_message.clone());
-                        
+                    chat.messages.push(ai_message.clone());
+                    
                     HttpResponse::Ok().json(ChatResponse {
                         message: ai_message,
                     })
                 },
-                Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Error: {}", e)
-                }))
+                Err(e) => {
+                    match e.downcast::<InferenceError>() {
+                        Ok(inference_error) => handle_inference_error(inference_error),
+                        Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {
+                            error: other_error.to_string(),
+                            error_type: "unknown_error".to_string(),
+                            status_code: 500,
+                        })
+                    }
+                }
             }
         },
         ContentItem::ToolUse { id, .. } => {
-            match _chat.handle_tool_use(&req.message.content[0]).await {
+            match chat.handle_tool_use(&req.message.content[0]).await {
                 Ok(tool_use_result) => HttpResponse::Ok().json(ChatResponse {
                     message: Message {
                         role: Role::User,
@@ -95,12 +150,13 @@ async fn chat_handler(
                                 content: tool_use_result
                             }
                         ]
-
                     }
                 }),
-                Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Error: {}", e)
-                }))
+                Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+                    error: e.to_string(),
+                    error_type: "tool_error".to_string(),
+                    status_code: 500,
+                })
             }
         },
         ContentItem::ToolResult { .. } => {
@@ -108,22 +164,30 @@ async fn chat_handler(
                 role: Role::User,
                 content: req.message.content.clone(),
             };
-            _chat.messages.push(msg.clone());
-            match _chat.send_message(msg).await {
+            chat.messages.push(msg.clone());
+            
+            match chat.send_message(msg).await {
                 Ok(response) => {
                     let ai_message = Message {
                         role: Role::Assistant,
                         content: response.content.clone()
                     };
-                    _chat.messages.push(ai_message.clone());
-                        
+                    chat.messages.push(ai_message.clone());
+                    
                     HttpResponse::Ok().json(ChatResponse {
                         message: ai_message,
                     })
                 },
-                Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": format!("Error: {}", e)
-                }))
+                Err(e) => {
+                    match e.downcast::<InferenceError>() {
+                        Ok(inference_error) => handle_inference_error(inference_error),
+                        Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {
+                            error: other_error.to_string(),
+                            error_type: "unknown_error".to_string(),
+                            status_code: 500,
+                        })
+                    }
+                }
             }
         }
     }
@@ -176,7 +240,6 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
 
     HttpServer::new(move || {
         let cors = Cors::default()
-            // TODO find a way to make this hostable on server
             .allowed_origin(&server_url)
             .allowed_origin(&format!("http://localhost:{}", port))
             .allowed_origin(&format!("http://127.0.0.1:{}", port))
@@ -201,7 +264,6 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     .run()
     .await
 }
-
 
 #[get("/{filename:.*}")]
 async fn index(

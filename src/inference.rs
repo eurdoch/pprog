@@ -1,5 +1,5 @@
 use anyhow::Result;
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde::{Serialize, Deserialize};
 use std::env;
 use crate::{config::ProjectConfig, tooler::Tooler};
@@ -77,6 +77,29 @@ struct OpenAIRequest {
     tools: Option<serde_json::Value>,
 }
 
+#[derive(Debug)]
+pub enum InferenceError {
+    NetworkError(String),
+    ApiError(StatusCode, String),
+    InvalidResponse(String),
+    MissingApiKey(String),
+    SerializationError(String),
+}
+
+impl std::fmt::Display for InferenceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            InferenceError::NetworkError(msg) => write!(f, "Network error: {}", msg),
+            InferenceError::ApiError(status, msg) => write!(f, "API error ({}): {}", status, msg),
+            InferenceError::InvalidResponse(msg) => write!(f, "Invalid response: {}", msg),
+            InferenceError::MissingApiKey(msg) => write!(f, "Missing API key: {}", msg),
+            InferenceError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for InferenceError {}
+
 pub struct Inference {
     model: String,
     client: Client,
@@ -106,7 +129,7 @@ impl Inference {
         Self::default()
     }
 
-    pub async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+    pub async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         if self.base_url.contains("anthropic.com") {
             self.query_anthropic(messages, system_message).await
         } else {
@@ -114,11 +137,13 @@ impl Inference {
         }
     }
 
-    async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
-        let api_key = env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
+    async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+        let api_key = env::var("ANTHROPIC_API_KEY")
+            .map_err(|_| InferenceError::MissingApiKey("ANTHROPIC_API_KEY environment variable not set".to_string()))?;
         let system = system_message.unwrap_or("").to_string();
 
-        let tools = self.tooler.get_tools_json()?;
+        let tools = self.tooler.get_tools_json()
+            .map_err(|e| InferenceError::SerializationError(e.to_string()))?;
 
         let request = AnthropicRequest {
             model: &self.model,
@@ -135,18 +160,26 @@ impl Inference {
             .header("anthropic-version", "2023-06-01")
             .json(&request)
             .send()
-            .await?
-            .text()
-            .await?;
+            .await
+            .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        log::info!("Network response text: {}", response);
+        let status = response.status();
+        let response_text = response.text().await
+            .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        let res: ModelResponse = serde_json::from_str(&response)?;
-        Ok(res)
+        log::info!("Network response text: {}", response_text);
+
+        if !status.is_success() {
+            return Err(InferenceError::ApiError(status, response_text));
+        }
+
+        serde_json::from_str(&response_text)
+            .map_err(|e| InferenceError::InvalidResponse(e.to_string()))
     }
 
-    async fn query_openai(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
-        let api_key = env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY environment variable not set");
+    async fn query_openai(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+        let api_key = env::var("OPENAI_API_KEY")
+            .map_err(|_| InferenceError::MissingApiKey("OPENAI_API_KEY environment variable not set".to_string()))?;
 
         if let Some(sys_msg) = system_message {
             messages.insert(0, Message {
@@ -176,7 +209,8 @@ impl Inference {
             })
         }).collect();
 
-        let tools = self.tooler.get_tools_json().ok();
+        let tools = self.tooler.get_tools_json()
+            .map_err(|e| InferenceError::SerializationError(e.to_string())).ok();
 
         let request = OpenAIRequest {
             model: self.model.clone(),
@@ -191,13 +225,20 @@ impl Inference {
             .header("Authorization", format!("Bearer {}", api_key))
             .json(&request)
             .send()
-            .await?
-            .text()
-            .await?;
+            .await
+            .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        log::info!("OpenAI API response text: {}", response);
+        let status = response.status();
+        let response_text = response.text().await
+            .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        let res: ModelResponse = serde_json::from_str(&response)?;
-        Ok(res)
+        log::info!("OpenAI API response text: {}", response_text);
+
+        if !status.is_success() {
+            return Err(InferenceError::ApiError(status, response_text));
+        }
+
+        serde_json::from_str(&response_text)
+            .map_err(|e| InferenceError::InvalidResponse(e.to_string()))
     }
 }
