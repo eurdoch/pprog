@@ -35,7 +35,6 @@ impl Chat {
             .ok_or_else(|| anyhow::anyhow!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
     }
 
-    // TODO get rid of message parameter and just use existingb messages
     pub async fn send_message(&mut self, message: Message) -> Result<ModelResponse, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;
@@ -54,15 +53,13 @@ impl Chat {
                 "#,
                 &tree_string,
             );
-            let response = self.inference.query_anthropic(self.messages.clone(), Some(&system_message)).await?;
+            let response = self.inference.query_model(self.messages.clone(), Some(&system_message)).await?;
             Ok(response)
         } else {
             Err(anyhow::anyhow!("Can only send messages with user role when querying model."))
         }
     }
 
-
-    // TODO should refactor to Tooler struct
     pub async fn handle_tool_use(&mut self, content_item: &ContentItem) -> Result<String, anyhow::Error> {
         match content_item {
             ContentItem::ToolUse { name, input, .. } => {
@@ -212,7 +209,6 @@ impl ChatUI {
         Ok(())
     }
 
-    // TODO should probablyu remove parameter and use state within Chat structure
     pub async fn process_message(&mut self, message: Message) -> Result<(), anyhow::Error> {
         self.chat.messages.push(message.clone());
         self.render()?;

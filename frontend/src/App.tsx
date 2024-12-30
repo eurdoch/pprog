@@ -91,7 +91,11 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        const errorData = await response.json().catch(() => null);
+        console.log(errorData);
+        //const errorMessage = errorData?.error || response.statusText || 'Network response was not ok';
+        //alert(`Error: ${errorMessage}`);
+        throw new Error("");
       }
 
       const data = await response.json();
@@ -128,6 +132,10 @@ function App() {
 
     } catch (error: any) {
       console.error('Error:', error);
+      // If the error wasn't already handled by the response.ok check
+      if (!error.message.startsWith('Error:')) {
+        alert(`Error: ${error.message}`);
+      }
       setIsProcessing(false);
     }
   };

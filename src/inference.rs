@@ -61,7 +61,7 @@ pub struct ModelResponse {
 }
 
 #[derive(Serialize)]
-struct ModelRequest<'a> {
+struct AnthropicRequest<'a> {
     model: &'a str,
     messages: Vec<Message>,
     max_tokens: u32,
@@ -106,13 +106,21 @@ impl Inference {
         Self::default()
     }
 
-    pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+    pub async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+        if self.base_url.contains("anthropic.com") {
+            self.query_anthropic(messages, system_message).await
+        } else {
+            self.query_openai(messages, system_message).await
+        }
+    }
+
+    async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
         let api_key = env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
         let system = system_message.unwrap_or("").to_string();
 
         let tools = self.tooler.get_tools_json()?;
 
-        let request = ModelRequest {
+        let request = AnthropicRequest {
             model: &self.model,
             messages,
             max_tokens: 8096,
@@ -131,17 +139,15 @@ impl Inference {
             .text()
             .await?;
 
-        // TODO for errors add different type that can be returned to chat display error
         log::info!("Network response text: {}", response);
 
         let res: ModelResponse = serde_json::from_str(&response)?;
         Ok(res)
     }
 
-    pub async fn query_openai(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+    async fn query_openai(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
         let api_key = env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY environment variable not set");
 
-        // If a system message is provided, insert it at the beginning of the messages
         if let Some(sys_msg) = system_message {
             messages.insert(0, Message {
                 role: Role::System,
@@ -150,7 +156,6 @@ impl Inference {
         }
 
         let openai_messages = messages.into_iter().map(|msg| {
-            // Convert content to a single text string for OpenAI
             let content = msg.content.iter()
                 .filter_map(|item| {
                     match item {
@@ -192,7 +197,6 @@ impl Inference {
 
         log::info!("OpenAI API response text: {}", response);
 
-        // NOTE: You might need to adjust this to match OpenAI's response structure
         let res: ModelResponse = serde_json::from_str(&response)?;
         Ok(res)
     }
