@@ -39,21 +39,28 @@ function App() {
   }, [messages]);
 
   const handleEnterMessage = async (_e: any) => {
-    if (inputMessage.trim() === '') return;
+    try {
+      if (inputMessage.trim() === '') return;
+      setIsProcessing(true);
 
-    const userMessage: Message = {
-      role: "user",
-      content: [
-        { type: "text", "text": inputMessage.trim() }
-      ]
-    };
-    setMessages(prevMessages => [...prevMessages, userMessage]);
-    setInputMessage('');
+      const userMessage: Message = {
+        role: "user",
+        content: [
+          { type: "text", "text": inputMessage.trim() }
+        ]
+      };
+      setMessages(prevMessages => [...prevMessages, userMessage]);
+      setInputMessage('');
 
-    setIsProcessing(true);
-    handleSendMessage(userMessage);
-    setIsProcessing(false);
+      await handleSendMessage(userMessage);
+    } catch (error) {
+      console.error(error);
+      setIsProcessing(false);
+    } finally {
+      setIsProcessing(false);
+    }
   }
+
 
   const handleSendMessage = async (message: Message) => {
     try {
