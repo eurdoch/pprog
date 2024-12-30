@@ -9,7 +9,7 @@ use crossterm::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 use textwrap::{wrap, Options};
-use crate::{inference::{ContentItem, Inference, Message, Role, AnthropicResponse}, tree::GitTree};
+use crate::{inference::{ContentItem, Inference, Message, Role, ModelResponse}, tree::GitTree};
 
 // Core chat functionality separated from UI
 pub struct Chat {
@@ -36,7 +36,7 @@ impl Chat {
     }
 
     // TODO get rid of message parameter and just use existingb messages
-    pub async fn send_message(&mut self, message: Message) -> Result<AnthropicResponse, anyhow::Error> {
+    pub async fn send_message(&mut self, message: Message) -> Result<ModelResponse, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;
             let system_message = format!(

@@ -47,7 +47,7 @@ pub struct Usage {
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct AnthropicResponse {
+pub struct ModelResponse {
     pub content: Vec<ContentItem>,
     pub id: String,
     pub model: String,
@@ -60,7 +60,7 @@ pub struct AnthropicResponse {
 }
 
 #[derive(Serialize)]
-struct AnthropicRequest<'a> {
+struct ModelRequest<'a> {
     model: &'a str,
     messages: Vec<Message>,
     max_tokens: u32,
@@ -95,13 +95,13 @@ impl Inference {
         Self::default()
     }
 
-    pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<AnthropicResponse, anyhow::Error> {
+    pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
         let api_key = env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
         let system = system_message.unwrap_or("").to_string();
 
         let tools = self.tooler.get_tools_json()?;
 
-        let request = AnthropicRequest {
+        let request = ModelRequest {
             model: &self.model,
             messages,
             max_tokens: 8096,
@@ -123,7 +123,7 @@ impl Inference {
         // TODO for errors add different type that can be returned to chat display error
         log::info!("Network response text: {}", response);
 
-        let res: AnthropicResponse = serde_json::from_str(&response)?;
+        let res: ModelResponse = serde_json::from_str(&response)?;
         Ok(res)
     }
 }
