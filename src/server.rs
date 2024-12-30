@@ -3,7 +3,7 @@ use actix_cors::Cors;
 use handlebars::Handlebars;
 use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use crate::chat::Chat;
 use crate::inference::{Message, Role, ContentItem, InferenceError};
 use std::sync::Mutex;
@@ -22,7 +22,7 @@ pub struct ChatResponse {
 
 #[derive(Serialize)]
 pub struct ErrorResponse {
-    error: String,
+    error: Value,  // Changed to Value to support both string and object errors
     error_type: String,
     status_code: u16,
 }
@@ -44,39 +44,49 @@ fn get_mime_type(filename: &str) -> &'static str {
     }
 }
 
+fn parse_error_message(message: &str) -> Value {
+    // Try to parse the error message as JSON first
+    if let Ok(json_value) = serde_json::from_str::<Value>(message) {
+        json_value
+    } else {
+        // If it's not valid JSON, return it as a simple string
+        Value::String(message.to_string())
+    }
+}
+
 fn handle_inference_error(error: InferenceError) -> HttpResponse {
     match error {
         InferenceError::NetworkError(msg) => {
             HttpResponse::ServiceUnavailable().json(ErrorResponse {
-                error: msg,
+                error: parse_error_message(&msg),
                 error_type: "network_error".to_string(),
                 status_code: 503,
             })
         }
         InferenceError::ApiError(status, msg) => {
             HttpResponse::build(status).json(ErrorResponse {
-                error: msg,
+                error: parse_error_message(&msg),
                 error_type: "api_error".to_string(),
                 status_code: status.as_u16(),
             })
         }
         InferenceError::InvalidResponse(msg) => {
             HttpResponse::BadGateway().json(ErrorResponse {
-                error: msg,
+                error: parse_error_message(&msg),
                 error_type: "invalid_response".to_string(),
                 status_code: 502,
             })
         }
         InferenceError::MissingApiKey(msg) => {
             HttpResponse::InternalServerError().json(ErrorResponse {
-                error: msg,
+                error: parse_error_message(&msg),
                 error_type: "configuration_error".to_string(),
                 status_code: 500,
             })
         }
         InferenceError::SerializationError(msg) => {
             HttpResponse::InternalServerError().json(ErrorResponse {
-                error: msg,
+                error: parse_error_message(&msg),
                 error_type: "serialization_error".to_string(),
                 status_code: 500,
             })
@@ -131,7 +141,7 @@ async fn chat_handler(
                     match e.downcast::<InferenceError>() {
                         Ok(inference_error) => handle_inference_error(inference_error),
                         Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {
-                            error: other_error.to_string(),
+                            error: parse_error_message(&other_error.to_string()),
                             error_type: "unknown_error".to_string(),
                             status_code: 500,
                         })
@@ -153,7 +163,7 @@ async fn chat_handler(
                     }
                 }),
                 Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
-                    error: e.to_string(),
+                    error: parse_error_message(&e.to_string()),
                     error_type: "tool_error".to_string(),
                     status_code: 500,
                 })
@@ -182,7 +192,7 @@ async fn chat_handler(
                     match e.downcast::<InferenceError>() {
                         Ok(inference_error) => handle_inference_error(inference_error),
                         Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {
-                            error: other_error.to_string(),
+                            error: parse_error_message(&other_error.to_string()),
                             error_type: "unknown_error".to_string(),
                             status_code: 500,
                         })
