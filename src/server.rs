@@ -37,6 +37,17 @@ fn get_mime_type(filename: &str) -> &'static str {
     }
 }
 
+#[get("/clear")]
+async fn clear_chat(data: web::Data<AppState>) -> impl Responder {
+    let mut chat = data.chat.lock().unwrap();
+    let system_prompt = chat.messages.first().filter(|msg| msg.role == Role::System).cloned();
+    chat.messages.clear();
+    if let Some(prompt) = system_prompt {
+        chat.messages.push(prompt);
+    }
+    HttpResponse::Ok().json(json!({"cleared": true, "message": "Chat history cleared"}))
+}
+
 async fn chat_handler(
     data: web::Data<AppState>, 
     req: web::Json<ChatRequest>
@@ -176,6 +187,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
             .wrap(cors)
             .app_data(app_state.clone())
             .route("/chat", web::post().to(chat_handler))
+            .service(clear_chat)
             .service(index)
     })
     .bind(format!("{}:{}", host, port))?

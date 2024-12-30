@@ -107,23 +107,26 @@ function App() {
     }
   };
 
-  const handleClearChat = async () => {
+  const handleClearChat = async (_e: any) => {
     try {
-      const response = await fetch('http://localhost:8080/clear', {
-        method: 'POST',
+      const response = await fetch(`${window.SERVER_URL}/clear`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
-      console.log(response);
 
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
 
-      // Clear local messages state
-      setMessages([]);
-
+      let data = await response.json();
+      if (data.cleared) {
+        setMessages([]);
+        alert("Chat cleared successfully.");
+      } else {
+        alert("Something went wrong, chat not cleared.");
+      }
     } catch (error) {
       console.error('Error clearing chat:', error);
     }
