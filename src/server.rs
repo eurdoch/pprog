@@ -118,9 +118,10 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
 
     HttpServer::new(move || {
         let cors = Cors::default()
-            // TODO use host and port parameter
-            .allowed_origin("http://localhost:5173")
-            .allowed_origin("http://127.0.0.1:5173")
+            // TODO find a way to make this hostable on server
+            .allowed_origin(&server_url)
+            .allowed_origin(&format!("http://localhost:{}", port))
+            .allowed_origin(&format!("http://127.0.0.1:{}", port))
             .allowed_methods(vec!["GET", "POST", "OPTIONS"])
             .allowed_headers(vec![
                 http::header::AUTHORIZATION, 
@@ -140,6 +141,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     .run()
     .await
 }
+
 
 #[get("/{filename:.*}")]
 async fn index(
