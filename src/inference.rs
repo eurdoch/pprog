@@ -35,6 +35,7 @@ pub struct Message {
 pub enum Role {
     User,
     Assistant,
+    System,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
