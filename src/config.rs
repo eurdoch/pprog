@@ -18,7 +18,7 @@ impl Default for ProjectConfig {
         ProjectConfig {
             model: String::from("claude-3-5-sonnet-latest"),
             check_cmd: String::new(),
-            base_url: String::new(),
+            base_url: String::from("https://api.anthropic.com/v1"),
         }
     }
 }
@@ -115,7 +115,7 @@ impl ProjectConfig {
         let config = ProjectConfig {
             model: String::from("claude-3-5-sonnet-latest"),
             check_cmd,
-            base_url: String::new(),
+            base_url: String::from("https://api.anthropic.com/v1"),
         };
         config.save()?;
 
