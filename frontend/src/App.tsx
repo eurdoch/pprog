@@ -47,6 +47,7 @@ function App() {
         { type: "text", "text": inputMessage.trim() }
       ]
     };
+    setMessages(prevMessages => [...prevMessages, userMessage]);
     setInputMessage('');
 
     setIsProcessing(true);
@@ -55,8 +56,6 @@ function App() {
   }
 
   const handleSendMessage = async (message: Message) => {
-    setMessages(prevMessages => [...prevMessages, message]);
-
     try {
       const response = await fetch(`${window.SERVER_URL}/chat`, {
         method: 'POST',
@@ -73,15 +72,15 @@ function App() {
       const data = await response.json();
 
       for (let contentItem of data.message.content) {
+        setMessages(prevMessages => [
+          ...prevMessages,
+          {
+            role: data.message.role,
+            content: [contentItem],
+          },
+        ]);
         switch(contentItem.type) {
           case "text":
-            setMessages(prevMessages => [
-              ...prevMessages,
-              {
-                role: data.message.role,
-                content: [contentItem],
-              },
-            ]);
             break;
           // Received tool, immediately send back to handle too use on backend
           case "tool_use":

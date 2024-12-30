@@ -42,6 +42,8 @@ async fn chat_handler(
     req: web::Json<ChatRequest>
 ) -> impl Responder {
     let mut _chat = data.chat.lock().unwrap();
+    println!("{:#?}", _chat.messages.clone());
+    println!("Request message {:#?}", req.message.clone());
 
     match &req.message.content[0] {
         ContentItem::Text { .. } => {
@@ -67,7 +69,48 @@ async fn chat_handler(
                 }))
             }
         },
-        _ => HttpResponse::InternalServerError().body("Unhandled message type")
+        ContentItem::ToolUse { id, .. } => {
+            match _chat.handle_tool_use(&req.message.content[0]).await {
+                Ok(tool_use_result) => HttpResponse::Ok().json(ChatResponse {
+                    message: Message {
+                        role: Role::User,
+                        content: vec![
+                            ContentItem::ToolResult {
+                                tool_use_id: id.to_string(),
+                                content: tool_use_result
+                            }
+                        ]
+
+                    }
+                }),
+                Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("Error: {}", e)
+                }))
+            }
+        },
+        ContentItem::ToolResult { .. } => {
+            let msg = Message {
+                role: Role::User,
+                content: req.message.content.clone(),
+            };
+            _chat.messages.push(msg.clone());
+            match _chat.send_message(msg).await {
+                Ok(response) => {
+                    let ai_message = Message {
+                        role: Role::Assistant,
+                        content: response.content.clone()
+                    };
+                    _chat.messages.push(ai_message.clone());
+                        
+                    HttpResponse::Ok().json(ChatResponse {
+                        message: ai_message,
+                    })
+                },
+                Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("Error: {}", e)
+                }))
+            }
+        }
     }
 }
 
