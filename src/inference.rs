@@ -106,19 +106,11 @@ impl Inference {
         Self::default()
     }
 
-    pub async fn query_anthropic(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+    pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
         let api_key = env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
         let system = system_message.unwrap_or("").to_string();
 
         let tools = self.tooler.get_tools_json()?;
-
-        // If a system message is provided, insert it at the beginning of the messages
-        if let Some(sys_msg) = system_message {
-            messages.insert(0, Message {
-                role: Role::System,
-                content: vec![ContentItem::Text { text: sys_msg.to_string() }],
-            });
-        }
 
         let request = ModelRequest {
             model: &self.model,
