@@ -5,7 +5,6 @@ use crate::chat::Chat;
 use crate::inference::{Message, Role, ContentItem};
 use std::sync::Mutex;
 use std::collections::HashMap;
-use std::io;
 use actix_web::http;
 
 #[derive(Deserialize)]
