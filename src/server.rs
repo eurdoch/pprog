@@ -4,11 +4,13 @@ use serde::{Deserialize, Serialize};
 use crate::chat::Chat;
 use crate::inference::{Message, Role, ContentItem};
 use std::sync::Mutex;
-use include_dir::{include_dir, Dir};
+use std::path::{Path, PathBuf};
+use std::fs;
+use std::io;
+use std::process::Command;
 use mime_guess::from_path;
+use home;
 use actix_web::http;
-
-static FRONTEND_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/frontend/dist");
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
@@ -24,13 +26,79 @@ pub struct AppState {
     chat: Mutex<Chat>,
 }
 
+fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
+    // Create destination directory if it doesn't exist
+    fs::create_dir_all(dst)?;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let dst_path = dst.join(path.file_name().unwrap());
+
+        if path.is_dir() {
+            // Recursively copy subdirectories
+            copy_dir_recursive(&path, &dst_path)?;
+        } else {
+            // Copy files
+            fs::copy(&path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+fn prepare_frontend() -> io::Result<PathBuf> {
+    // Get the .cmon directory in the home directory
+    let home_dir = home::home_dir().ok_or_else(|| io::Error::new(
+        io::ErrorKind::NotFound, 
+        "Could not find home directory"
+    ))?;
+    
+    let cmon_dir = home_dir.join(".cmon");
+    let frontend_dir = cmon_dir.join("frontend");
+
+    // Create .cmon directory if it doesn't exist
+    fs::create_dir_all(&cmon_dir)?;
+
+    // Copy frontend files
+    let source_frontend = Path::new("frontend");
+    copy_dir_recursive(source_frontend, &frontend_dir)?;
+
+    // Run yarn install
+    let yarn_install = Command::new("yarn")
+        .current_dir(&frontend_dir)
+        .arg("install")
+        .status()?;
+
+    if !yarn_install.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other, 
+            "Failed to run yarn install"
+        ));
+    }
+
+    // Run yarn build
+    let yarn_build = Command::new("yarn")
+        .current_dir(&frontend_dir)
+        .arg("build")
+        .status()?;
+
+    if !yarn_build.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other, 
+            "Failed to run yarn build"
+        ));
+    }
+
+    Ok(frontend_dir.join("dist"))
+}
+
 async fn chat_handler(
     data: web::Data<AppState>, 
     req: web::Json<ChatRequest>
 ) -> impl Responder {
     let mut _chat = data.chat.lock().unwrap();
 
-    // TODO start over, assume only one content item
+    // Existing chat handler code remains the same
     match &req.message.content[0] {
         // Normal text query from user
         ContentItem::Text { .. } => {
@@ -126,32 +194,43 @@ async fn clear_chat_history(
 }
 
 #[get("/{filename:.*}")]
-async fn index(req: HttpRequest) -> impl Responder {
+async fn index(req: HttpRequest, frontend_dir: web::Data<PathBuf>) -> impl Responder {
     let path = req.match_info().query("filename").to_string();
-    let path = if path.is_empty() { "index.html".to_string() } else { path };
+    let path_to_check = if path.is_empty() { "index.html".to_string() } else { path };
 
-    // Try to get the file from the embedded directory
-    if let Some(file) = FRONTEND_DIR.get_file(&path) {
-        // Guess the mime type
-        let mime_type = from_path(&path).first_or_octet_stream();
-        
-        return HttpResponse::Ok()
-            .content_type(mime_type.as_ref())
-            .body(file.contents());
-    }
+    let full_path = frontend_dir.join(&path_to_check);
 
-    // If file not found, serve index.html for client-side routing
-    if let Some(index_file) = FRONTEND_DIR.get_file("index.html") {
-        HttpResponse::Ok()
-            .content_type("text/html")
-            .body(index_file.contents())
-    } else {
-        HttpResponse::InternalServerError()
-            .body("index.html not found in embedded files")
+    // Try to read the file
+    match fs::read(&full_path) {
+        Ok(contents) => {
+            // Guess the mime type
+            let mime_type = from_path(&path_to_check).first_or_octet_stream();
+            
+            HttpResponse::Ok()
+                .content_type(mime_type.as_ref())
+                .body(contents)
+        },
+        Err(_) => {
+            // If file not found, serve index.html for client-side routing
+            match fs::read(frontend_dir.join("index.html")) {
+                Ok(index_contents) => {
+                    HttpResponse::Ok()
+                        .content_type("text/html")
+                        .body(index_contents)
+                },
+                Err(_) => {
+                    HttpResponse::InternalServerError()
+                        .body("index.html not found in build directory")
+                }
+            }
+        }
     }
 }
 
 pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
+    // Prepare frontend: copy and build
+    let frontend_dist_dir = prepare_frontend()?;
+
     let app_state = web::Data::new(AppState {
         chat: Mutex::new(Chat::new()),
     });
@@ -174,6 +253,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .app_data(app_state.clone())
+            .app_data(web::Data::new(frontend_dist_dir.clone()))
             .route("/chat", web::post().to(chat_handler))
             .route("/history", web::get().to(get_chat_history))
             .route("/clear", web::post().to(clear_chat_history))

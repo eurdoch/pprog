@@ -570,6 +570,7 @@ dependencies = [
  "env_logger",
  "futures",
  "gix",
+ "home",
  "include_dir",
  "log",
  "mime_guess",
