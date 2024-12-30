@@ -27,6 +27,7 @@ interface Message {
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -48,7 +49,9 @@ function App() {
     };
     setInputMessage('');
 
+    setIsProcessing(true);
     handleSendMessage(userMessage);
+    setIsProcessing(false);
   }
 
   const handleSendMessage = async (message: Message) => {
@@ -101,6 +104,7 @@ function App() {
 
     } catch (error: any) {
       console.error('Error:', error);
+      setIsProcessing(false);
     }
   };
 
@@ -156,11 +160,22 @@ function App() {
           type="text" 
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleEnterMessage(e)}
+          onKeyPress={(e) => e.key === 'Enter' && !isProcessing && handleEnterMessage(e)}
           placeholder="Type your message..."
         />
-        <button onClick={handleEnterMessage}>Send</button>
-        <button onClick={handleClearChat}>Clear Chat</button>
+        <button 
+          onClick={handleEnterMessage} 
+          disabled={isProcessing}
+          className={`send-button ${isProcessing ? 'processing' : ''}`}
+        >
+          Send
+        </button>
+        <button 
+          onClick={handleClearChat}
+          disabled={isProcessing}
+        >
+          Clear Chat
+        </button>
       </div>
     </div>
   );
