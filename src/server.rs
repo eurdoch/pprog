@@ -42,8 +42,6 @@ async fn chat_handler(
     req: web::Json<ChatRequest>
 ) -> impl Responder {
     let mut _chat = data.chat.lock().unwrap();
-    println!("{:#?}", _chat.messages.clone());
-    println!("Request message {:#?}", req.message.clone());
 
     match &req.message.content[0] {
         ContentItem::Text { .. } => {
