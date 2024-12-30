@@ -101,7 +101,10 @@ function App() {
         }
       }
 
-    } catch (error) {
+    } catch (error: any) {
+      if (error.includes("NetworkError")) {
+        alert("Network Error");
+      }
       console.error('Error:', error);
     }
   };
