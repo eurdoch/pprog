@@ -37,6 +37,12 @@ fn get_mime_type(filename: &str) -> &'static str {
     }
 }
 
+#[get("/messages")]
+async fn get_messages(data: web::Data<AppState>) -> impl Responder {
+    let chat = data.chat.lock().unwrap();
+    HttpResponse::Ok().json(&chat.messages)
+}
+
 #[get("/clear")]
 async fn clear_chat(data: web::Data<AppState>) -> impl Responder {
     let mut chat = data.chat.lock().unwrap();
@@ -188,6 +194,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
             .app_data(app_state.clone())
             .route("/chat", web::post().to(chat_handler))
             .service(clear_chat)
+            .service(get_messages)
             .service(index)
     })
     .bind(format!("{}:{}", host, port))?

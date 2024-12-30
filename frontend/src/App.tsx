@@ -38,6 +38,24 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
+  // New effect to fetch messages on component mount
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        const response = await fetch(`${window.SERVER_URL}/messages`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch messages');
+        }
+        const data = await response.json();
+        setMessages(data);
+      } catch (error) {
+        console.error('Error fetching messages:', error);
+      }
+    };
+
+    fetchMessages();
+  }, []); // Empty dependency array means this runs once on mount
+
   const handleEnterMessage = async (_e: any) => {
     try {
       if (inputMessage.trim() === '') return;
