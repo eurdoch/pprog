@@ -1,6 +1,9 @@
 use actix_web::{web, App, HttpResponse, HttpServer, Responder, get, HttpRequest};
 use actix_cors::Cors;
+use handlebars::Handlebars;
+use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use crate::chat::Chat;
 use crate::inference::{Message, Role, ContentItem};
 use std::sync::Mutex;
@@ -19,22 +22,10 @@ pub struct ChatResponse {
 
 pub struct AppState {
     chat: Mutex<Chat>,
+    static_files: HashMap<String, Vec<u8>>,
 }
 
-// Macro to include all frontend files at compile time
-macro_rules! include_frontend_files {
-    () => {{
-        let mut files: HashMap<String, &'static [u8]> = HashMap::new();
-        
-        // Directly include files from the dist directory
-        files.insert("index.html".to_string(), include_bytes!("../frontend/dist/index.html"));
-        files.insert("assets/index-BD9teqBM.css".to_string(), include_bytes!("../frontend/dist/assets/index-BD9teqBM.css"));
-        files.insert("assets/index-BkiH-5Ms.js".to_string(), include_bytes!("../frontend/dist/assets/index-BkiH-5Ms.js"));
-        files.insert("vite.svg".to_string(), include_bytes!("../frontend/dist/vite.svg"));
-
-        files
-    }};
-}
+static DIST_DIR: Dir = include_dir!("./frontend/dist/");
 
 fn get_mime_type(filename: &str) -> &'static str {
     match filename {
@@ -43,27 +34,6 @@ fn get_mime_type(filename: &str) -> &'static str {
         f if f.ends_with(".js") => "application/javascript; charset=utf-8",
         f if f.ends_with(".svg") => "image/svg+xml",
         _ => "application/octet-stream"
-    }
-}
-
-#[get("/{filename:.*}")]
-async fn index(req: HttpRequest, static_files: web::Data<HashMap<String, &'static [u8]>>) -> impl Responder {
-    let path = req.match_info().query("filename").to_string();
-    let path_to_check = if path.is_empty() { "index.html".to_string() } else { path };
-
-    match static_files.get(&path_to_check) {
-        Some(contents) => {
-            HttpResponse::Ok()
-                .content_type(get_mime_type(&path_to_check))
-                .body(contents.to_vec())
-        },
-        None => {
-            // Fallback to index.html for client-side routing
-            let index_html = static_files.get("index.html").unwrap();
-            HttpResponse::Ok()
-                .content_type("text/html; charset=utf-8")
-                .body(index_html.to_vec())
-        }
     }
 }
 
@@ -101,18 +71,69 @@ async fn chat_handler(
     }
 }
 
+fn process_files(dir: &Dir, base_path: &str, static_files: &mut HashMap<String, Vec<u8>>, hbs: &mut Handlebars, template_data: &serde_json::Value) {
+    for entry in dir.entries() {
+        let relative_path = entry.path().to_string_lossy().replace("\\", "/");
+        let full_path = format!("{}/{}", base_path, relative_path);
+        println!("Processing path: {}", full_path); // Add debug logging
+
+        if let Some(subdir) = entry.as_dir() {
+            process_files(subdir, &full_path, static_files, hbs, template_data);
+        } else if let Some(file) = entry.as_file() {
+            let contents = if full_path.ends_with(".html") {
+                let template_str = String::from_utf8_lossy(file.contents());
+                // Register and render the template using Handlebars
+                match hbs.render_template(&template_str, template_data) {
+                    Ok(rendered) => rendered.into_bytes(),
+                    Err(_) => file.contents().to_vec()
+                }
+            } else {
+                file.contents().to_vec()
+            };
+
+            // Normalize path and ensure it starts with a slash
+            let normalized_path = if full_path.starts_with('/') { full_path.clone() } else { format!("/{}", full_path) };
+            
+            // Print out the paths being added to static_files
+            println!("Adding static file: {}", normalized_path);
+            
+            static_files.insert(normalized_path, contents);
+        }
+    }
+}
+
 pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
-    // Embed frontend files
-    let static_files = include_frontend_files!();
+    let server_url = format!("http://{}:{}", host, port);
+    let template_data = json!({
+        "server_url": server_url
+    });
+
+    let mut hbs = Handlebars::new();
+    let mut static_files = HashMap::new();
+    
+    // Print out the contents of DIST_DIR
+    println!("Entries in DIST_DIR:");
+    for entry in DIST_DIR.entries() {
+        println!("- {:?}", entry.path());
+    }
+
+    process_files(&DIST_DIR, "", &mut static_files, &mut hbs, &template_data);
+
+    println!("Processed static files:");
+    for (key, _) in &static_files {
+        println!("- {}", key);
+    }
 
     let app_state = web::Data::new(AppState {
         chat: Mutex::new(Chat::new()),
+        static_files,
     });
 
     println!("Starting server on {}:{}", host, port);
 
     HttpServer::new(move || {
         let cors = Cors::default()
+            // TODO use host and port parameter
             .allowed_origin("http://localhost:5173")
             .allowed_origin("http://127.0.0.1:5173")
             .allowed_methods(vec!["GET", "POST", "OPTIONS"])
@@ -127,11 +148,53 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .app_data(app_state.clone())
-            .app_data(web::Data::new(static_files.clone()))
             .route("/chat", web::post().to(chat_handler))
             .service(index)
     })
     .bind(format!("{}:{}", host, port))?
     .run()
     .await
+}
+
+#[get("/{filename:.*}")]
+async fn index(
+    req: HttpRequest, 
+    app_data: web::Data<AppState>
+) -> impl Responder {
+    let path = req.match_info().query("filename").to_string();
+
+    // Debug: print out all available static files
+    println!("Available static files:");
+    for (key, _) in &app_data.as_ref().static_files {
+        println!("- {}", key);
+    }
+
+    // Handle root path (index.html)
+    if path.is_empty() {
+        return match app_data.as_ref().static_files.get("/index.html") {
+            Some(contents) => HttpResponse::Ok()
+                .content_type("text/html; charset=utf-8")
+                .body(contents.to_vec()),
+            None => HttpResponse::NotFound().body("Index file not found"),
+        };
+    }
+
+    // Try different path variations
+    let path_variations = vec![
+        format!("/{}", path),
+        path.clone(),
+        format!("/assets/{}", path),
+        format!("assets/{}", path)
+    ];
+
+    for variation in path_variations {
+        if let Some(contents) = app_data.as_ref().static_files.get(&variation) {
+            let content_type = get_mime_type(&path);
+            return HttpResponse::Ok()
+                .content_type(content_type)
+                .body(contents.to_vec());
+        }
+    }
+
+    HttpResponse::NotFound().body(format!("File not found: {}", path))
 }
