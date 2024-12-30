@@ -9,6 +9,8 @@ use crate::tree::GitTree;
 pub struct ProjectConfig {
     pub model: String,
     pub check_cmd: String,
+    #[serde(default)]
+    pub base_url: String,
 }
 
 impl Default for ProjectConfig {
@@ -16,6 +18,7 @@ impl Default for ProjectConfig {
         ProjectConfig {
             model: String::from("claude-3-5-sonnet-latest"),
             check_cmd: String::new(),
+            base_url: String::new(),
         }
     }
 }
@@ -112,6 +115,7 @@ impl ProjectConfig {
         let config = ProjectConfig {
             model: String::from("claude-3-5-sonnet-latest"),
             check_cmd,
+            base_url: String::new(),
         };
         config.save()?;
 
@@ -119,4 +123,3 @@ impl ProjectConfig {
         Ok(())
     }
 }
-
