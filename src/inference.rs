@@ -136,9 +136,17 @@ impl Inference {
         Ok(res)
     }
 
-    pub async fn query_openai(&self, messages: Vec<Message>, base_url: Option<&str>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+    pub async fn query_openai(&self, mut messages: Vec<Message>, base_url: Option<&str>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
         let api_key = env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY environment variable not set");
         let base_url = base_url.unwrap_or("https://api.openai.com/v1");
+
+        // If a system message is provided, insert it at the beginning of the messages
+        if let Some(sys_msg) = system_message {
+            messages.insert(0, Message {
+                role: Role::System,
+                content: vec![ContentItem::Text { text: sys_msg.to_string() }],
+            });
+        }
 
         let openai_messages = messages.into_iter().map(|msg| {
             // Convert content to a single text string for OpenAI
