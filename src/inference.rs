@@ -81,6 +81,7 @@ pub struct Inference {
     model: String,
     client: Client,
     tooler: Tooler,
+    base_url: String,
 }
 
 impl std::default::Default for Inference {
@@ -95,6 +96,7 @@ impl std::default::Default for Inference {
             model: config.model,
             client: Client::new(),
             tooler: Tooler::new(),
+            base_url: if config.base_url.is_empty() { "https://api.anthropic.com/v1".to_string() } else { config.base_url.clone() },
         }
     }
 }
@@ -104,11 +106,19 @@ impl Inference {
         Self::default()
     }
 
-    pub async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+    pub async fn query_anthropic(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
         let api_key = env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
         let system = system_message.unwrap_or("").to_string();
 
         let tools = self.tooler.get_tools_json()?;
+
+        // If a system message is provided, insert it at the beginning of the messages
+        if let Some(sys_msg) = system_message {
+            messages.insert(0, Message {
+                role: Role::System,
+                content: vec![ContentItem::Text { text: sys_msg.to_string() }],
+            });
+        }
 
         let request = ModelRequest {
             model: &self.model,
@@ -119,7 +129,7 @@ impl Inference {
         };
 
         let response = self.client
-            .post("https://api.anthropic.com/v1/messages")
+            .post(format!("{}/messages", self.base_url))
             .header("Content-Type", "application/json")
             .header("X-API-Key", api_key)
             .header("anthropic-version", "2023-06-01")
@@ -136,9 +146,8 @@ impl Inference {
         Ok(res)
     }
 
-    pub async fn query_openai(&self, mut messages: Vec<Message>, base_url: Option<&str>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+    pub async fn query_openai(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
         let api_key = env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY environment variable not set");
-        let base_url = base_url.unwrap_or("https://api.openai.com/v1");
 
         // If a system message is provided, insert it at the beginning of the messages
         if let Some(sys_msg) = system_message {
@@ -180,7 +189,7 @@ impl Inference {
         };
 
         let response = self.client
-            .post(format!("{}/chat/completions", base_url))
+            .post(format!("{}/chat/completions", self.base_url))
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", api_key))
             .json(&request)

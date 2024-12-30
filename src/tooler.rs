@@ -101,7 +101,6 @@ impl Tooler {
             },
         ];
 
-        log::info!("{}", config.check_cmd);
         if config.check_cmd != "" {
             tools.push(
                 Tool {
