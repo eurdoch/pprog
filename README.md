@@ -61,6 +61,7 @@ compile_check - check for compilation errors, or for interpreted programs checks
 - If using Anthropic/OpenAI models it can get expensive, but is usually very effective.  When using Sonnet 3.5 a single code change request routinely cost 0.20 USD or more.  This is because the program is constantly reading/writing entire files to satisfy each request.  I shudder to use Opus and haven't even tried.  Haiku 3.5 seems to be a good trade-off, usually costing a few cents per change of a medium sized project.  I normally use Haiku.  DeepSeek is dirt cheap but doesn't seem as effective.  OpenAI models can be effective, but usually get throttled by rate limits almost immediately.
 - Make sure to commit and push changes frequently.  It's ok to sometimes make multiple changes before committing but if it's going to be a large change then best to commit before making them.
 - The system prompt notes that the user may ask questions and the model is usually good at figuring out when a question without needed code changes is asked, but I usually prepend question messages with 'Question: ' to make sure
+- Sometimes the model does not correctly identify that compilation failed, just ask it to rerun. 
 - You'll still have to do some coding
 
 happy hacking!
