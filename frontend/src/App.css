@@ -110,6 +110,10 @@ body {
 
 .tool-msg {
   align-self: center;
+  min-width: 200px;
+  flex-shrink: 0;
+  width: fit-content;
+  max-width: 90%;
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
   color: white;
   font-style: italic;
@@ -119,7 +123,6 @@ body {
     inset 0 1px rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 14px 24px;
-  max-width: 90%;
   margin: 20px 0;
   position: relative;
   overflow: hidden;
