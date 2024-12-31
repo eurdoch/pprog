@@ -7,6 +7,13 @@ description = "An LLM pair programming server with web interface"
 license = "MIT"
 repository = "https://github.com/foomprep/pprog"
 
+include = [
+    "src/**/*",
+    "build.rs",
+    "frontend/dist/**/*",  # Include only the built files
+    "Cargo.toml",
+]
+
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 reqwest = { version = "0.11", features = ["json"] }
