@@ -6,7 +6,7 @@ pprog is an LLM based pair programmer for generating and editing code in individ
 - Browser
 - git
 
-To install Rust, consult their [website](https://www.rust-lang.org/).
+To install Rust, go to their [website](https://www.rust-lang.org/).
 
 ## install
 ```
