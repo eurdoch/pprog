@@ -2,6 +2,10 @@
 name = "pprog"
 version = "0.0.1"
 edition = "2021"
+authors = ["George Balch <george.balch@proton.me>"]
+description = "An LLM pair programming server with web interface"
+license = "MIT"
+repository = "https://github.com/foomprep/pprog"
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
@@ -35,3 +39,7 @@ handlebars = "6.2.0"
 
 [dev-dependencies]
 tempfile = "3.8"
+
+[[bin]]
+name = "pprog"
+path = "src/main.rs"
