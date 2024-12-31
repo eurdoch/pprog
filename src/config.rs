@@ -18,7 +18,7 @@ pub struct ProjectConfig {
 impl Default for ProjectConfig {
     fn default() -> Self {
         ProjectConfig {
-            model: String::from("claude-3-5-sonnet-latest"),
+            model: String::from("claude-3-5-haiku-latest"),
             check_cmd: String::new(),
             base_url: String::from("https://api.anthropic.com/v1"),
             api_key: String::new(),
