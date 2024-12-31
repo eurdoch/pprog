@@ -60,6 +60,36 @@ pub struct ModelResponse {
     pub usage: Usage,
 }
 
+#[derive(Debug, Deserialize)]
+struct OpenAIResponse {
+    id: String,
+    object: String,
+    created: i64,
+    model: String,
+    choices: Vec<OpenAIChoice>,
+    usage: OpenAIUsage,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAIChoice {
+    index: i32,
+    message: OpenAIMessage,
+    finish_reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAIMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAIUsage {
+    prompt_tokens: i32,
+    completion_tokens: i32,
+    total_tokens: i32,
+}
+
 #[derive(Serialize)]
 struct AnthropicRequest<'a> {
     model: &'a str,
@@ -238,7 +268,31 @@ impl Inference {
             return Err(InferenceError::ApiError(status, response_text));
         }
 
-        serde_json::from_str(&response_text)
-            .map_err(|e| InferenceError::InvalidResponse(e.to_string()))
+        // Parse the OpenAI response
+        let openai_response: OpenAIResponse = serde_json::from_str(&response_text)
+            .map_err(|e| InferenceError::InvalidResponse(format!("Failed to parse OpenAI response: {}", e)))?;
+
+        if openai_response.choices.is_empty() {
+            return Err(InferenceError::InvalidResponse("No choices in OpenAI response".to_string()));
+        }
+
+        // Convert OpenAI response to ModelResponse format
+        Ok(ModelResponse {
+            content: vec![ContentItem::Text {
+                text: openai_response.choices[0].message.content.clone(),
+            }],
+            id: openai_response.id,
+            model: openai_response.model,
+            role: openai_response.choices[0].message.role.clone(),
+            message_type: "text".to_string(),
+            stop_reason: openai_response.choices[0].finish_reason.clone(),
+            stop_sequence: None,
+            usage: Usage {
+                input_tokens: openai_response.usage.prompt_tokens,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
+                output_tokens: openai_response.usage.completion_tokens,
+            },
+        })
     }
 }
