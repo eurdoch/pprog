@@ -11,6 +11,7 @@ include = [
     "src/**/*",
     "build.rs",
     "frontend/dist/**/*",  # Include only the built files
+    "tokenizers/*",
     "Cargo.toml",
 ]
 
