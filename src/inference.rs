@@ -62,8 +62,6 @@ pub struct ModelResponse {
 #[derive(Debug, Deserialize)]
 struct OpenAIResponse {
     id: String,
-    object: String,
-    created: i64,
     model: String,
     choices: Vec<OpenAIChoice>,
     usage: OpenAIUsage,
@@ -71,7 +69,6 @@ struct OpenAIResponse {
 
 #[derive(Debug, Deserialize)]
 struct OpenAIChoice {
-    index: i32,
     message: OpenAIMessage,
     finish_reason: String,
 }
@@ -86,7 +83,6 @@ struct OpenAIMessage {
 struct OpenAIUsage {
     prompt_tokens: i32,
     completion_tokens: i32,
-    total_tokens: i32,
 }
 
 #[derive(Serialize)]

@@ -165,11 +165,14 @@ async fn chat_handler(
                         ]
                     }
                 }),
-                Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
-                    error: parse_error_message(&e.to_string()),
-                    error_type: "tool_error".to_string(),
-                    status_code: 500,
-                })
+                Err(e) => {
+                    chat.messages.pop();
+                    HttpResponse::InternalServerError().json(ErrorResponse {
+                        error: parse_error_message(&e.to_string()),
+                        error_type: "tool_error".to_string(),
+                        status_code: 500,
+                    })
+                }
             }
         },
         ContentItem::ToolResult { .. } => {

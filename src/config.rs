@@ -27,7 +27,7 @@ impl Default for ProjectConfig {
 }
 
 impl ProjectConfig {
-    const CONFIG_FILE: &'static str = "cmon.toml";
+    const CONFIG_FILE: &'static str = "pprog.toml";
 
     fn detect_check_cmd() -> String {
         let root_path = match GitTree::get_git_root() {

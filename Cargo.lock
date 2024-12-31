@@ -555,39 +555,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbd0f76e066e64fdc5631e3bb46381254deab9ef1158292f27c8c57e3bf3fe59"
 
 [[package]]
-name = "cmon"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-files",
- "actix-rt",
- "actix-web",
- "anyhow",
- "clap",
- "config",
- "crossterm",
- "dirs",
- "env_logger",
- "futures",
- "gix",
- "handlebars",
- "home",
- "include_dir",
- "log",
- "mime_guess",
- "once_cell",
- "reqwest",
- "scopeguard",
- "serde",
- "serde_json",
- "tempfile",
- "textwrap",
- "tokio",
- "toml",
- "unicode-segmentation",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2689,6 +2656,39 @@ name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
+
+[[package]]
+name = "pprog"
+version = "0.0.1"
+dependencies = [
+ "actix-cors",
+ "actix-files",
+ "actix-rt",
+ "actix-web",
+ "anyhow",
+ "clap",
+ "config",
+ "crossterm",
+ "dirs",
+ "env_logger",
+ "futures",
+ "gix",
+ "handlebars",
+ "home",
+ "include_dir",
+ "log",
+ "mime_guess",
+ "once_cell",
+ "reqwest",
+ "scopeguard",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "textwrap",
+ "tokio",
+ "toml",
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "ppv-lite86"

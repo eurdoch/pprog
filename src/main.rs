@@ -6,23 +6,12 @@ mod config;
 mod server;
 
 use std::fs::OpenOptions;
-
-use chat::ChatUI;
-use clap::{CommandFactory, Parser, Subcommand};
-use config::ProjectConfig;
-use crossterm::{event::{self, Event, KeyCode}, terminal};
-use env_logger::{Builder, Target};
-use inference::{ContentItem, Message, Role};
-use tree::GitTree;
 use std::io::Write;
 
-struct TerminalGuard;
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        let _ = terminal::disable_raw_mode();
-    }
-}
+use clap::{CommandFactory, Parser, Subcommand};
+use config::ProjectConfig;
+use env_logger::{Builder, Target};
+use tree::GitTree;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -35,8 +24,6 @@ struct Cli {
 enum Commands {
     #[command(about = "Initialize config for project")]
     Init,
-    #[command(about = "Open chat window")]
-    Chat,
     #[command(about = "Start the API server")]
     Serve {
         #[arg(short, long, default_value = "127.0.0.1")]
@@ -48,11 +35,11 @@ enum Commands {
 
 fn setup_logger() -> Result<(), anyhow::Error> {
     let home_dir = dirs::home_dir().expect("Failed to get home directory");
-    let cmon_dir = home_dir.join(".cmon");
-    if !cmon_dir.exists() {
-        std::fs::create_dir_all(&cmon_dir).expect("Failed to create .cmon directory");
+    let pprog_dir = home_dir.join(".pprog");
+    if !pprog_dir.exists() {
+        std::fs::create_dir_all(&pprog_dir).expect("Failed to create .pprog directory");
     }
-    let log_file_path = cmon_dir.join("log");
+    let log_file_path = pprog_dir.join("log");
 
     let file = OpenOptions::new()
         .create(true)
@@ -66,57 +53,6 @@ fn setup_logger() -> Result<(), anyhow::Error> {
         .format_timestamp_secs()
         .filter_level(log::LevelFilter::Info)
         .init();
-
-    Ok(())
-}
-
-async fn run_chat() -> Result<(), Box<dyn std::error::Error>> {
-    terminal::enable_raw_mode()?;
-    let _guard = TerminalGuard;  
-    
-    let mut chat_ui = ChatUI::new();
-    chat_ui.render()?;
-
-    loop {
-        if let Event::Key(key_event) = event::read()? {
-            match key_event.code {
-                KeyCode::Esc => {
-                    chat_ui.cleanup()?;
-                    break;
-                }
-                KeyCode::Enter => {
-                    if !chat_ui.input_buffer.is_empty() {
-                        if chat_ui.input_buffer == "/exit" {
-                            chat_ui.cleanup()?;
-                            break;
-                        }
-                        let user_input = std::mem::take(&mut chat_ui.input_buffer);
-                        let new_message = Message {
-                            role: Role::User,
-                            content: vec![
-                                ContentItem::Text { text: user_input } 
-                            ]
-                        };
-                        chat_ui.process_message(new_message).await?;
-                    }
-                }
-                KeyCode::PageUp => {
-                    chat_ui.scroll_up();
-                }
-                KeyCode::PageDown => {
-                    chat_ui.scroll_down(usize::MAX);
-                }
-                KeyCode::Backspace => {
-                    chat_ui.input_buffer.pop();
-                }
-                KeyCode::Char(c) => {
-                    chat_ui.input_buffer.push(c);
-                }
-                _ => {}
-            }
-            chat_ui.render()?;
-        }
-    }
 
     Ok(())
 }
@@ -139,27 +75,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
-                println!("Adding config to .gitignore.");
                 let gitignore_path = git_root.join(".gitignore");
-                let mut gitignore = std::fs::OpenOptions::new()
-                    .write(true)
-                    .append(true)
-                    .create(true)
-                    .open(gitignore_path)
-                    .unwrap();
+                let mut gitignore_contents = String::new();
 
-                writeln!(gitignore, r#"
-# cmon config
-cmon.toml
+                if gitignore_path.exists() {
+                    gitignore_contents = std::fs::read_to_string(&gitignore_path).unwrap();
+                }
+
+                if !gitignore_contents.contains("pprog.toml") {
+                    println!("Adding config to .gitignore.");
+                    let mut gitignore = std::fs::OpenOptions::new()
+                        .write(true)
+                        .append(true)
+                        .create(true)
+                        .open(gitignore_path)
+                        .unwrap();
+
+                    writeln!(gitignore, r#"
+# pprog config
+pprog.toml
 "#)?;
+                }
 
                 println!("Init successful.");
-            }
-        }
-        Some(Commands::Chat) => {
-            if let Err(e) = run_chat().await {
-                terminal::disable_raw_mode()?;
-                return Err(e);
             }
         }
         Some(Commands::Serve { host, port }) => {
@@ -173,3 +111,4 @@ cmon.toml
 
     Ok(())
 }
+
