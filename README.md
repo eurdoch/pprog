@@ -1,3 +1,4 @@
+
 # p(air) prog(rammer)
 pprog is an LLM based pair programmer for generating and editing code in individual projects (but not for windows, sorry :()
 
@@ -5,4 +6,5 @@ pprog is an LLM based pair programmer for generating and editing code in individ
 - Rust
 - Browser
 
-To install Rust, consult their (website)[https://www.rust-lang.org/tools/install].
+To install Rust, consult their [website](https://www.rust-lang.org/).
+
