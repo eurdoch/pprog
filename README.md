@@ -1,6 +1,5 @@
-
 # p(air) prog(rammer)
-pprog is an LLM based pair programmer for generating and editing code in individual projects (but not for windows, sorry :()
+### pprog is an LLM based pair programmer for generating and editing code in individual projects (but not for windows, sorry 🥲)
 
 ## prereqs
 - Rust
