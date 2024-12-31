@@ -1,7 +1,6 @@
 use anyhow::Result;
 use reqwest::{Client, StatusCode};
 use serde::{Serialize, Deserialize};
-use std::env;
 use crate::{config::ProjectConfig, tooler::Tooler};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -135,6 +134,7 @@ pub struct Inference {
     client: Client,
     tooler: Tooler,
     base_url: String,
+    api_key: String,
 }
 
 impl std::default::Default for Inference {
@@ -150,6 +150,7 @@ impl std::default::Default for Inference {
             client: Client::new(),
             tooler: Tooler::new(),
             base_url: if config.base_url.is_empty() { "https://api.anthropic.com/v1".to_string() } else { config.base_url.clone() },
+            api_key: config.api_key,
         }
     }
 }
@@ -168,8 +169,10 @@ impl Inference {
     }
 
     async fn query_anthropic(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
-        let api_key = env::var("ANTHROPIC_API_KEY")
-            .map_err(|_| InferenceError::MissingApiKey("ANTHROPIC_API_KEY environment variable not set".to_string()))?;
+        if self.api_key.is_empty() {
+            return Err(InferenceError::MissingApiKey("API key not found in config".to_string()));
+        }
+
         let system = system_message.unwrap_or("").to_string();
 
         let tools = self.tooler.get_tools_json()
@@ -186,7 +189,7 @@ impl Inference {
         let response = self.client
             .post(format!("{}/messages", self.base_url))
             .header("Content-Type", "application/json")
-            .header("X-API-Key", api_key)
+            .header("X-API-Key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .json(&request)
             .send()
@@ -208,8 +211,9 @@ impl Inference {
     }
 
     async fn query_openai(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
-        let api_key = env::var("OPENAI_API_KEY")
-            .map_err(|_| InferenceError::MissingApiKey("OPENAI_API_KEY environment variable not set".to_string()))?;
+        if self.api_key.is_empty() {
+            return Err(InferenceError::MissingApiKey("API key not found in config".to_string()));
+        }
 
         if let Some(sys_msg) = system_message {
             messages.insert(0, Message {
@@ -252,7 +256,7 @@ impl Inference {
         let response = self.client
             .post(format!("{}/chat/completions", self.base_url))
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&request)
             .send()
             .await

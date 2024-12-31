@@ -11,6 +11,8 @@ pub struct ProjectConfig {
     pub check_cmd: String,
     #[serde(default)]
     pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
 }
 
 impl Default for ProjectConfig {
@@ -19,6 +21,7 @@ impl Default for ProjectConfig {
             model: String::from("claude-3-5-sonnet-latest"),
             check_cmd: String::new(),
             base_url: String::from("https://api.anthropic.com/v1"),
+            api_key: String::new(),
         }
     }
 }
@@ -108,6 +111,11 @@ impl ProjectConfig {
             return Err("Project already initialized".into());
         }
 
+        // Try to get API key from environment first
+        let api_key = std::env::var("ANTHROPIC_API_KEY")
+            .or_else(|_| std::env::var("OPENAI_API_KEY"))
+            .unwrap_or_default();
+
         // Detect appropriate check command
         let check_cmd = Self::detect_check_cmd();
 
@@ -116,6 +124,7 @@ impl ProjectConfig {
             model: String::from("claude-3-5-sonnet-latest"),
             check_cmd,
             base_url: String::from("https://api.anthropic.com/v1"),
+            api_key,
         };
         config.save()?;
 
