@@ -1,4 +1,7 @@
 use std::process::Command;
+
+use tokenizers::Tokenizer;
+
 use crate::{
     inference::{
         ContentItem,
@@ -10,16 +13,49 @@ use crate::{
     tree::GitTree
 };
 
+static TOKENIZER_JSON: &[u8] = include_bytes!("../tokenizers/gpt2.json");
+
 pub struct Chat {
     pub messages: Vec<Message>,
     inference: Inference,
+    tokenizer: Tokenizer,
 }
 
 impl Chat {
     pub fn new() -> Self {
+        let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).expect("Failed to load tokenizer.");
         Self {
             messages: Vec::new(),
             inference: Inference::new(),
+            tokenizer,
+        }
+    }
+
+    fn content_to_string(content: &[ContentItem]) -> String {
+        content.iter()
+            .map(|item| match item {
+                ContentItem::Text { text } => text.clone(),
+                ContentItem::ToolUse { name, input, .. } => format!("tool {} with input: {:?}", name, input),
+                ContentItem::ToolResult { content, .. } => format!("tool result: {}", content),
+            })
+            .collect::<Vec<String>>()
+            .join(" ")
+    }
+
+    fn calculate_total_tokens(&self) -> usize {
+        self.messages.iter()
+            .map(|msg| {
+                // Combine role and content for complete message token count
+                let text = format!("{:?} {}", msg.role, Self::content_to_string(&msg.content));
+                let encoding = self.tokenizer.encode(text, false).unwrap();
+                encoding.len()
+            })
+            .sum()
+    }
+
+    fn trim_messages_to_token_limit(&mut self, limit: usize) {
+        while self.calculate_total_tokens() > limit && !self.messages.is_empty() {
+            self.messages.remove(0);
         }
     }
 
@@ -53,6 +89,8 @@ impl Chat {
                 "#,
                 &tree_string,
             );
+            self.trim_messages_to_token_limit(150000);
+            
             let response = self.inference.query_model(self.messages.clone(), Some(&system_message)).await?;
             Ok(response)
         } else {
@@ -127,4 +165,3 @@ Stderr:
         }
     }
 }
-

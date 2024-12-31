@@ -123,9 +123,8 @@ async fn chat_handler(
                 role: Role::User,
                 content: vec![req.message.content[0].clone()]
             };
-            // Push the message to chat history first
+
             chat.messages.push(new_msg.clone());
-            
             match chat.send_message(new_msg).await {
                 Ok(response) => {
                     let ai_message = Message {
