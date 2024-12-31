@@ -14,7 +14,7 @@ cargo install pprog
 ```
 
 ## usage
-To use `pprog`, `cd` into the directory of an existing or template project.  `pprog` depends on `git` and also uses `.gitignore` to communicate the available files to LLM, so the project must be have `git` initialized. For this example, we'll create a basic NodeJS project.
+To use `pprog`, `cd` into the directory of an existing or template project.  `pprog` depends on `git` and also uses `.gitignore` to communicate the available files to LLM, so the project must have `git` initialized. For this example, we'll create a basic NodeJS project.
 ```
 mkdir example-project
 cd example-project
