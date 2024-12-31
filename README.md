@@ -47,7 +47,7 @@ pprog serve --port 3002
 ```
 
 # tools
-`pprog` uses a very small set of tools to make changes.  currently it has four existing tools
+`pprog` uses a very small set of tools to make changes.  currently it has four.
 ```
 read_file - read entire file contents
 write_file - replace entire file with contents
