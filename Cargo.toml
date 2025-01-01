@@ -35,6 +35,13 @@ toml = "0.8.19"
 dirs = "5.0.1"
 include_dir = "0.7"
 mime_guess = "2.0"
+async-trait = "0.1"
+
+# AWS Dependencies
+aws-config = "1.1.1"
+aws-sdk-bedrock = "1.9.0"
+aws-sdk-bedrockruntime = "1.9.0"
+aws-types = "1.1.1"
 
 # Actix web dependencies
 actix-web = "4.4"

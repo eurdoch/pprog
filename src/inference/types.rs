@@ -1,4 +1,6 @@
 use serde::{Serialize, Deserialize};
+use async_trait::async_trait;
+use anyhow::Result;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(tag = "type")]
@@ -77,3 +79,9 @@ impl std::fmt::Display for InferenceError {
 }
 
 impl std::error::Error for InferenceError {}
+
+#[async_trait]
+pub trait Inference {
+    async fn generate(&self, messages: &[Message]) -> Result<ModelResponse>;
+    async fn generate_stream(&self, messages: &[Message]) -> Result<aws_sdk_bedrockruntime::types::ResponseStream>;
+}
