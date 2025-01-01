@@ -256,41 +256,80 @@ body {
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
 
-/* Floating Action Button */
+/* Enhanced Floating Action Button */
 .fab {
   position: fixed;
-  bottom: 90px;
+  bottom: 110px;
   right: 24px;
-  width: 56px;
-  height: 56px;
+  width: 64px; /* Increased size */
+  height: 64px; /* Increased size */
   border-radius: 50%;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #10b981, #059669); /* Original green gradient */
   color: white;
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 
+    0 6px 16px rgba(16, 185, 129, 0.3),
+    0 2px 8px rgba(16, 185, 129, 0.2),
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(16, 185, 129, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 28px; /* Larger icon */
+  padding: 0;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: fabSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   z-index: 1000;
+  /* Subtle inner glow */
+  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.3));
+}
+
+.fab::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  padding: 2px; /* Creates border width */
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 .fab:hover {
   transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
-  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  box-shadow: 
+    0 8px 20px rgba(16, 185, 129, 0.4),
+    0 4px 12px rgba(16, 185, 129, 0.3),
+    inset 0 1px rgba(255, 255, 255, 0.15),
+    0 0 0 1px rgba(16, 185, 129, 0.15);
+  background: linear-gradient(135deg, #34d399, #10b981); /* Lighter shade of the original green */
+  filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.4));
+}
+
+.fab:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 
+    0 4px 12px rgba(16, 185, 129, 0.3),
+    0 2px 6px rgba(16, 185, 129, 0.2),
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(16, 185, 129, 0.1);
 }
 
 @keyframes fabSlideIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(20px) scale(0.8);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
