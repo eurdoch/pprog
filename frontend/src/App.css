@@ -259,12 +259,12 @@ body {
 /* Enhanced Floating Action Button */
 .fab {
   position: fixed;
-  bottom: 110px;
+  bottom: 90px;
   right: 24px;
-  width: 64px; /* Increased size */
-  height: 64px; /* Increased size */
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #10b981, #059669); /* Original green gradient */
+  background: linear-gradient(135deg, #10b981, #059669);
   color: white;
   border: none;
   cursor: pointer;
@@ -276,12 +276,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px; /* Larger icon */
+  font-size: 28px;
   padding: 0;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: fabSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   z-index: 1000;
-  /* Subtle inner glow */
   filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.3));
 }
 
@@ -293,7 +292,7 @@ body {
   right: 0;
   bottom: 0;
   border-radius: 50%;
-  padding: 2px; /* Creates border width */
+  padding: 2px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
   -webkit-mask: 
     linear-gradient(#fff 0 0) content-box, 
@@ -310,7 +309,7 @@ body {
     0 4px 12px rgba(16, 185, 129, 0.3),
     inset 0 1px rgba(255, 255, 255, 0.15),
     0 0 0 1px rgba(16, 185, 129, 0.15);
-  background: linear-gradient(135deg, #34d399, #10b981); /* Lighter shade of the original green */
+  background: linear-gradient(135deg, #34d399, #10b981);
   filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.4));
 }
 
@@ -332,4 +331,92 @@ body {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  z-index: 1100;
+}
+
+.modal-content {
+  background: white;
+  width: 50%;
+  max-width: 600px;
+  height: 100%;
+  padding: 24px;
+  position: relative;
+  overflow-y: auto;
+  animation: slideIn 0.3s ease-out;
+  background: linear-gradient(135deg, #ffffff, #f8fafc);
+  box-shadow: 
+    -8px 0 32px rgba(0, 0, 0, 0.1),
+    -4px 0 16px rgba(0, 0, 0, 0.06);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.1);
+  color: #4b5563;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: rgba(0, 0, 0, 0.2);
+  color: #1f2937;
+  transform: scale(1.1);
+}
+
+.modal-content h2 {
+  color: #1f2937;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.diff-content {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1f2937;
+  margin-top: 16px;
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.06),
+    0 0 0 1px rgba(0, 0, 0, 0.02);
 }

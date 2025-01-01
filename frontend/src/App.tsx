@@ -29,6 +29,8 @@ function App() {
   const [inputMessage, setInputMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showFab, setShowFab] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [diffContent, setDiffContent] = useState<any>(null);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -65,9 +67,15 @@ function App() {
       }
       const data = await response.json();
       console.log('Diff result:', data);
+      setDiffContent(data);
+      setShowModal(true);
     } catch (error) {
       console.error('Error fetching diff:', error);
     }
+  };
+
+  const handleModalClose = () => {
+    setShowModal(false);
   };
 
   const handleEnterMessage = async (_e: any) => {
@@ -95,7 +103,6 @@ function App() {
     }
   }
 
-
   const handleSendMessage = async (message: Message) => {
     try {
       const response = await fetch(`${window.SERVER_URL}/chat`, {
@@ -112,8 +119,6 @@ function App() {
         console.error(data);
         setIsProcessing(false);
         return;
-        //alert(`${data.error.error.message}`);
-        //throw new Error(data.error.error.message);
       }
 
       const data = await response.json();
@@ -212,6 +217,17 @@ function App() {
         >
           🔍
         </button>
+      )}
+      {showModal && (
+        <div className="modal-overlay" onClick={handleModalClose}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={handleModalClose}>×</button>
+            <h2>Diff Results</h2>
+            <pre className="diff-content">
+              {JSON.stringify(diffContent, null, 2)}
+            </pre>
+          </div>
+        </div>
       )}
       <div className="chat-input">
         <input 
