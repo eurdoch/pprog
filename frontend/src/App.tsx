@@ -28,6 +28,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showFab, setShowFab] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -56,10 +57,24 @@ function App() {
     fetchMessages();
   }, []); // Empty dependency array means this runs once on mount
 
+  const handleDiffCheck = async () => {
+    try {
+      const response = await fetch(`${window.SERVER_URL}/diff`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch diff');
+      }
+      const data = await response.json();
+      console.log('Diff result:', data);
+    } catch (error) {
+      console.error('Error fetching diff:', error);
+    }
+  };
+
   const handleEnterMessage = async (_e: any) => {
     try {
       if (inputMessage.trim() === '') return;
       setIsProcessing(true);
+      setShowFab(false);
 
       const userMessage: Message = {
         role: "user",
@@ -76,6 +91,7 @@ function App() {
       setIsProcessing(false);
     } finally {
       setIsProcessing(false);
+      setShowFab(true);
     }
   }
 
@@ -188,6 +204,15 @@ function App() {
         })}
         <div ref={messagesEndRef} />
       </div>
+      {showFab && (
+        <button 
+          className="fab"
+          onClick={handleDiffCheck}
+          title="Check Diff"
+        >
+          🔍
+        </button>
+      )}
       <div className="chat-input">
         <input 
           type="text" 
