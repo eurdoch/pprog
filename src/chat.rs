@@ -10,7 +10,8 @@ use crate::{
         Role,
         ModelResponse
     },
-    tree::GitTree
+    tree::GitTree,
+    config::ProjectConfig
 };
 
 static TOKENIZER_JSON: &[u8] = include_bytes!("../tokenizers/gpt2.json");
@@ -19,15 +20,18 @@ pub struct Chat {
     pub messages: Vec<Message>,
     inference: Inference,
     tokenizer: Tokenizer,
+    max_tokens: usize,
 }
 
 impl Chat {
     pub fn new() -> Self {
         let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).expect("Failed to load tokenizer.");
+        let config = ProjectConfig::load().unwrap_or_default();
         Self {
             messages: Vec::new(),
             inference: Inference::new(),
             tokenizer,
+            max_tokens: config.max_content,
         }
     }
 
@@ -53,8 +57,8 @@ impl Chat {
             .sum()
     }
 
-    fn trim_messages_to_token_limit(&mut self, limit: usize) {
-        while self.calculate_total_tokens() > limit && !self.messages.is_empty() {
+    fn trim_messages_to_token_limit(&mut self) {
+        while self.calculate_total_tokens() > self.max_tokens && !self.messages.is_empty() {
             self.messages.remove(0);
         }
     }
@@ -89,7 +93,7 @@ impl Chat {
                 "#,
                 &tree_string,
             );
-            self.trim_messages_to_token_limit(150000);
+            self.trim_messages_to_token_limit();
             
             let response = self.inference.query_model(self.messages.clone(), Some(&system_message)).await?;
             Ok(response)

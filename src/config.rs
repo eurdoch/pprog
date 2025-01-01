@@ -13,6 +13,8 @@ pub struct ProjectConfig {
     pub base_url: String,
     #[serde(default)]
     pub api_key: String,
+    #[serde(default)]
+    pub max_content: usize,
 }
 
 impl Default for ProjectConfig {
@@ -22,6 +24,7 @@ impl Default for ProjectConfig {
             check_cmd: String::new(),
             base_url: String::from("https://api.anthropic.com/v1"),
             api_key: String::new(),
+            max_content: 128000
         }
     }
 }
@@ -106,7 +109,7 @@ impl ProjectConfig {
             }
 
         };
-        let config_file = config_dir.join("cmon.toml");
+        let config_file = config_dir.join("pprog.toml");
         if config_file.exists() {
             return Err("Project already initialized".into());
         }
@@ -125,6 +128,7 @@ impl ProjectConfig {
             check_cmd,
             base_url: String::from("https://api.anthropic.com/v1"),
             api_key,
+            max_content: 128000
         };
         config.save()?;
 
