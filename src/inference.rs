@@ -131,6 +131,7 @@ pub struct Inference {
     tooler: Tooler,
     base_url: String,
     api_key: String,
+    max_output_tokens: u32,
 }
 
 impl std::default::Default for Inference {
@@ -147,6 +148,7 @@ impl std::default::Default for Inference {
             tooler: Tooler::new(),
             base_url: if config.base_url.is_empty() { "https://api.anthropic.com/v1".to_string() } else { config.base_url.clone() },
             api_key: config.api_key,
+            max_output_tokens: config.max_output_tokens,
         }
     }
 }
@@ -177,7 +179,7 @@ impl Inference {
         let request = AnthropicRequest {
             model: &self.model,
             messages,
-            max_tokens: 8096,
+            max_tokens: self.max_output_tokens,
             tools,
             system,
         };
@@ -245,7 +247,7 @@ impl Inference {
         let request = OpenAIRequest {
             model: self.model.clone(),
             messages: openai_messages,
-            max_tokens: Some(8096),
+            max_tokens: Some(self.max_output_tokens),
             tools,
         };
 

@@ -15,6 +15,8 @@ pub struct ProjectConfig {
     pub api_key: String,
     #[serde(default)]
     pub max_content: usize,
+    #[serde(default)]
+    pub max_output_tokens: u32,
 }
 
 impl Default for ProjectConfig {
@@ -24,7 +26,8 @@ impl Default for ProjectConfig {
             check_cmd: String::new(),
             base_url: String::from("https://api.anthropic.com/v1"),
             api_key: String::new(),
-            max_content: 128000
+            max_content: 128000,
+            max_output_tokens: 8096
         }
     }
 }
@@ -128,7 +131,8 @@ impl ProjectConfig {
             check_cmd,
             base_url: String::from("https://api.anthropic.com/v1"),
             api_key,
-            max_content: 128000
+            max_content: 128000,
+            max_output_tokens: 8096
         };
         config.save()?;
 
