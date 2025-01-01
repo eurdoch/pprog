@@ -61,7 +61,7 @@ impl std::default::Default for OpenAIInference {
             model: config.model,
             client: Client::new(),
             tooler: Tooler::new(),
-            base_url: "https://api.openai.com/v1".to_string(),
+            base_url: config.base_url,
             api_key: config.api_key,
             max_output_tokens: config.max_output_tokens,
         }
@@ -128,6 +128,7 @@ impl OpenAIInference {
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
+        log::info!("{:?}", response_text);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
