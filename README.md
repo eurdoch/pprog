@@ -30,16 +30,15 @@ api_key = "..." // if ANTHROPIC_API_KEY env var is set then it will automaticall
 max_context = 128000
 max_output_tokens = 8096
 ```
-The program that generates and edits code in the backend uses the `check_cmd` to check compilation or successful operation.  In this case `node index.js` will be run to check for any errors in code changes and then loop to fix these changes if they exist.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  An Anthropic account is assumed on init, but OpenAI-compatible APIs can be used as well.  For example, to use DeepSeek you can change config to 
+The program that generates and edits code in the backend uses the `check_cmd` to check compilation or successful operation.  In this case `node index.js` will be run to check for any errors in code changes and then loop to fix these changes if they exist.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  An Anthropic account is assumed on init, but OpenAI-compatible APIs can be used as well.  For example, to use OpenAI you can change config to 
 ```
-model = "deepseek-chat"
+model = "gpt-4o"
 check_cmd = "node index.js"
-base_url = "https://api.deepseek.com/v1"
-api_key = "<DEEPSEEK API KEY>"
-max_context = 128000
+base_url = "https://api.openai.com/v1"
+api_key = "<OEPNAI API KEY>"
+max_context = 100000
 max_output_tokens = 8096
 ```
-With config set, to start the server run 
 ```
 pprog serve
 ```
