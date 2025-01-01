@@ -23,10 +23,12 @@ pprog init
 ```
 This will generate a config file `pprog.toml` with sensible defaults depending on the type of project.  For this example the `pprog.toml` will contain
 ```
-model = "claude-3-5-sonnet-latest"
+model = "claude-3-5-haiku-latest"
 check_cmd = "node index.js"
 base_url = "https://api.anthropic.com/v1"
 api_key = "..." // if ANTHROPIC_API_KEY env var is set then it will automatically add it
+max_context = 128000
+max_output_tokens = 8096
 ```
 The program that generates and edits code in the backend uses the `check_cmd` to check compilation or successful operation.  In this case `node index.js` will be run to check for any errors in code changes and then loop to fix these changes if they exist.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  An Anthropic account is assumed on init, but OpenAI-compatible APIs can be used as well.  For example, to use DeepSeek you can change config to 
 ```
@@ -34,6 +36,8 @@ model = "deepseek-chat"
 check_cmd = "node index.js"
 base_url = "https://api.deepseek.com/v1"
 api_key = "<DEEPSEEK API KEY>"
+max_context = 128000
+max_output_tokens = 8096
 ```
 With config set, to start the server run 
 ```
