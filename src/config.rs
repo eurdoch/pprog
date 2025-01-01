@@ -14,7 +14,7 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub api_key: String,
     #[serde(default)]
-    pub max_content: usize,
+    pub max_context: usize,
     #[serde(default)]
     pub max_output_tokens: u32,
 }
@@ -26,7 +26,7 @@ impl Default for ProjectConfig {
             check_cmd: String::new(),
             base_url: String::from("https://api.anthropic.com/v1"),
             api_key: String::new(),
-            max_content: 128000,
+            max_context: 128000,
             max_output_tokens: 8096
         }
     }
@@ -127,11 +127,11 @@ impl ProjectConfig {
 
         // Create config with detected values
         let config = ProjectConfig {
-            model: String::from("claude-3-5-sonnet-latest"),
+            model: String::from("claude-3-5-haiku-latest"),
             check_cmd,
             base_url: String::from("https://api.anthropic.com/v1"),
             api_key,
-            max_content: 128000,
+            max_context: 128000,
             max_output_tokens: 8096
         };
         config.save()?;

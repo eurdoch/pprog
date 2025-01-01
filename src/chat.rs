@@ -31,7 +31,7 @@ impl Chat {
             messages: Vec::new(),
             inference: Inference::new(),
             tokenizer,
-            max_tokens: config.max_content,
+            max_tokens: config.max_context,
         }
     }
 
