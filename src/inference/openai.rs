@@ -1,11 +1,13 @@
+use std::collections::HashMap;
 use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
 
-use crate::{config::ProjectConfig, tooler::Tooler};
+use crate::config::ProjectConfig;
 use super::types::{
     ContentItem, InferenceError, Message, ModelResponse, Role, Usage
 };
+use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
 
 #[derive(Serialize)]
 struct OpenAIRequest {
@@ -32,7 +34,7 @@ struct OpenAIChoice {
 #[derive(Debug, Deserialize)]
 struct OpenAIMessage {
     role: String,
-    content: String,
+    content: Vec<ContentItem>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -44,7 +46,6 @@ struct OpenAIUsage {
 pub struct OpenAIInference {
     model: String,
     client: Client,
-    tooler: Tooler,
     base_url: String,
     api_key: String,
     max_output_tokens: u32,
@@ -60,7 +61,6 @@ impl std::default::Default for OpenAIInference {
         OpenAIInference {
             model: config.model,
             client: Client::new(),
-            tooler: Tooler::new(),
             base_url: config.base_url,
             api_key: config.api_key,
             max_output_tokens: config.max_output_tokens,
@@ -71,6 +71,134 @@ impl std::default::Default for OpenAIInference {
 impl OpenAIInference {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn get_tools(&self) -> Vec<OpenAITool> {
+        vec![
+            self.read_file_tool(),
+            self.write_file_tool(),
+            self.execute_tool(),
+            self.compile_check_tool(),
+        ]
+    }
+
+    fn read_file_tool(&self) -> OpenAITool {
+        OpenAITool {
+            name: "read_file".to_string(),
+            description: "Read file as string using path relative to root directory of project.".to_string(),
+            tool_type: "function".to_string(),
+            function: OpenAIToolFunction {
+                name: "read_file".to_string(),
+                description: "Read file as string using path relative to root directory of project.".to_string(),
+                parameters: InputSchema {
+                    schema_type: "object".to_string(),
+                    properties: {
+                        let mut map = HashMap::new();
+                        map.insert(
+                            "path".to_string(),
+                            PropertySchema {
+                                property_type: "string".to_string(),
+                                description: "The file path relative to the project root directory".to_string(),
+                            },
+                        );
+                        map
+                    },
+                    required: vec!["path".to_string()],
+                },
+            },
+        }
+    }
+
+    fn write_file_tool(&self) -> OpenAITool {
+        OpenAITool {
+            name: "write_file".to_string(),
+            description: "Write string to file at path relative to root directory of project.".to_string(),
+            tool_type: "function".to_string(),
+            function: OpenAIToolFunction {
+                name: "write_file".to_string(),
+                description: "Write string to file at path relative to root directory of project.".to_string(),
+                parameters: InputSchema {
+                    schema_type: "object".to_string(),
+                    properties: {
+                        let mut map = HashMap::new();
+                        map.insert(
+                            "path".to_string(),
+                            PropertySchema {
+                                property_type: "string".to_string(),
+                                description: "The file path relative to the project root directory".to_string(),
+                            },
+                        );
+                        map.insert(
+                            "content".to_string(),
+                            PropertySchema {
+                                property_type: "string".to_string(),
+                                description: "The content to write to the file".to_string(),
+                            },
+                        );
+                        map
+                    },
+                    required: vec!["path".to_string(), "content".to_string()],
+                },
+            },
+        }
+    }
+
+    fn execute_tool(&self) -> OpenAITool {
+        OpenAITool {
+            name: "execute".to_string(),
+            description: "Execute bash statements as a single string..".to_string(),
+            tool_type: "function".to_string(),
+            function: OpenAIToolFunction {
+                name: "execute".to_string(),
+                description: "Execute bash statements as a single string..".to_string(),
+                parameters: InputSchema {
+                    schema_type: "object".to_string(),
+                    properties: {
+                        let mut map = HashMap::new();
+                        map.insert(
+                            "statement".to_string(),
+                            PropertySchema {
+                                property_type: "string".to_string(),
+                                description: "The bash statement to be executed.".to_string(),
+                            },
+                        );
+                        map
+                    },
+                    required: vec!["statement".to_string()],
+                },
+            },
+        }
+    }
+
+    fn compile_check_tool(&self) -> OpenAITool {
+        OpenAITool {
+            name: "compile_check".to_string(),
+            description: "Check if project compiles or runs without error.".to_string(),
+            tool_type: "function".to_string(),
+            function: OpenAIToolFunction {
+                name: "compile_check".to_string(),
+                description: "Check if project compiles or runs without error.".to_string(),
+                parameters: InputSchema {
+                    schema_type: "object".to_string(),
+                    properties: {
+                        let mut map = HashMap::new();
+                        map.insert(
+                            "cmd".to_string(),
+                            PropertySchema {
+                                property_type: "string".to_string(),
+                                description: "The command to check for compiler/interpreter errors.".to_string(),
+                            },
+                        );
+                        map
+                    },
+                    required: vec!["cmd".to_string()],
+                },
+            },
+        }
+    }
+
+    fn get_tools_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::to_value(self.get_tools())
     }
 
     pub async fn query_model(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
@@ -106,7 +234,7 @@ impl OpenAIInference {
             })
         }).collect();
 
-        let tools = self.tooler.get_tools_json()
+        let tools = self.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string())).ok();
 
         let request = OpenAIRequest {
@@ -142,9 +270,7 @@ impl OpenAIInference {
         }
 
         Ok(ModelResponse {
-            content: vec![ContentItem::Text {
-                text: openai_response.choices[0].message.content.clone(),
-            }],
+            content: openai_response.choices[0].message.content.clone(),
             id: openai_response.id,
             model: openai_response.model,
             role: openai_response.choices[0].message.role.clone(),

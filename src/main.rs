@@ -1,7 +1,6 @@
 mod inference;
 mod chat;
 mod tree;
-mod tooler;
 mod config;
 mod server;
 
@@ -111,4 +110,3 @@ pprog.toml
 
     Ok(())
 }
-

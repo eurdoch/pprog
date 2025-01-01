@@ -1,11 +1,13 @@
+use std::collections::HashMap;
 use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
 
-use crate::{config::ProjectConfig, tooler::Tooler};
+use crate::config::ProjectConfig;
 use super::types::{
     ContentItem, InferenceError, Message, ModelResponse, Usage
 };
+use super::tools::{AnthropicTool, InputSchema, PropertySchema};
 
 #[derive(Serialize)]
 struct AnthropicRequest<'a> {
@@ -36,7 +38,6 @@ struct AnthropicUsage {
 pub struct AnthropicInference {
     model: String,
     client: Client,
-    tooler: Tooler,
     base_url: String,
     api_key: String,
     max_output_tokens: u32,
@@ -52,7 +53,6 @@ impl std::default::Default for AnthropicInference {
         AnthropicInference {
             model: config.model,
             client: Client::new(),
-            tooler: Tooler::new(),
             base_url: config.base_url,
             api_key: config.api_key,
             max_output_tokens: config.max_output_tokens,
@@ -65,6 +65,114 @@ impl AnthropicInference {
         Self::default()
     }
 
+    fn get_tools(&self) -> Vec<AnthropicTool> {
+        vec![
+            self.read_file_tool(),
+            self.write_file_tool(),
+            self.execute_tool(),
+            self.compile_check_tool(),
+        ]
+    }
+
+    fn read_file_tool(&self) -> AnthropicTool {
+        AnthropicTool {
+            name: "read_file".to_string(),
+            description: "Read file as string using path relative to root directory of project.".to_string(),
+            input_schema: InputSchema {
+                schema_type: "object".to_string(),
+                properties: {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "path".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The file path relative to the project root directory".to_string(),
+                        },
+                    );
+                    map
+                },
+                required: vec!["path".to_string()],
+            },
+        }
+    }
+
+    fn write_file_tool(&self) -> AnthropicTool {
+        AnthropicTool {
+            name: "write_file".to_string(),
+            description: "Write string to file at path relative to root directory of project.".to_string(),
+            input_schema: InputSchema {
+                schema_type: "object".to_string(),
+                properties: {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "path".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The file path relative to the project root directory".to_string(),
+                        },
+                    );
+                    map.insert(
+                        "content".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The content to write to the file".to_string(),
+                        },
+                    );
+                    map
+                },
+                required: vec!["path".to_string(), "content".to_string()],
+            },
+        }
+    }
+
+    fn execute_tool(&self) -> AnthropicTool {
+        AnthropicTool {
+            name: "execute".to_string(),
+            description: "Execute bash statements as a single string..".to_string(),
+            input_schema: InputSchema {
+                schema_type: "object".to_string(),
+                properties: {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "statement".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The bash statement to be executed.".to_string(),
+                        },
+                    );
+                    map
+                },
+                required: vec!["statement".to_string()],
+            },
+        }
+    }
+
+    fn compile_check_tool(&self) -> AnthropicTool {
+        AnthropicTool {
+            name: "compile_check".to_string(),
+            description: "Check if project compiles or runs without error.".to_string(),
+            input_schema: InputSchema {
+                schema_type: "object".to_string(),
+                properties: {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "cmd".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The command to check for compiler/interpreter errors.".to_string(),
+                        },
+                    );
+                    map
+                },
+                required: vec!["cmd".to_string()],
+            },
+        }
+    }
+
+    fn get_tools_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::to_value(self.get_tools())
+    }
+
     pub async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("Anthropic API key not found".to_string()));
@@ -72,7 +180,7 @@ impl AnthropicInference {
 
         let system = system_message.unwrap_or("").to_string();
 
-        let tools = self.tooler.get_tools_json()
+        let tools = self.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string()))?;
 
         let request = AnthropicRequest {
