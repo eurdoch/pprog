@@ -1,6 +1,7 @@
 use anyhow::Result;
 use reqwest::{Client, StatusCode};
 use serde::{Serialize, Deserialize};
+use serde_json::Value;
 use crate::{config::ProjectConfig, tooler::Tooler};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -198,7 +199,13 @@ impl Inference {
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        log::info!("Network response text: {:#?}", response_text);
+        
+        let debug_json: Value = serde_json::from_str(&response_text).unwrap_or_else(|_| {
+            log::error!("Failed to parse network response text as JSON");
+            Value::Null
+        });
+        log::info!("Network response JSON: {:#?}", debug_json);
+
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
@@ -264,7 +271,11 @@ impl Inference {
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        log::info!("OpenAI API response text: {:#?}", response_text);
+        let debug_json: Value = serde_json::from_str(&response_text).unwrap_or_else(|_| {
+            log::error!("Failed to parse network response text as JSON");
+            Value::Null
+        });
+        log::info!("OpenAI API response text: {:#?}", debug_json);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
