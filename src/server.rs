@@ -9,6 +9,8 @@ use crate::inference::types::{Message, Role, ContentItem, InferenceError};
 use std::sync::Mutex;
 use std::collections::HashMap;
 use actix_web::http;
+use std::process::Command;
+use std::str;
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
@@ -25,6 +27,11 @@ pub struct ErrorResponse {
     error: Value,  // Changed to Value to support both string and object errors
     error_type: String,
     status_code: u16,
+}
+
+#[derive(Serialize)]
+pub struct DiffResponse {
+    diff: String,
 }
 
 pub struct AppState {
@@ -109,6 +116,33 @@ async fn clear_chat(data: web::Data<AppState>) -> impl Responder {
         chat.messages.push(prompt);
     }
     HttpResponse::Ok().json(json!({"cleared": true, "message": "Chat history cleared"}))
+}
+
+#[get("/diff")]
+async fn get_diff() -> impl Responder {
+    // Run git diff command
+    let output = match Command::new("git")
+        .args(["diff"])
+        .output() {
+            Ok(output) => output,
+            Err(e) => return HttpResponse::InternalServerError().json(ErrorResponse {
+                error: parse_error_message(&e.to_string()),
+                error_type: "git_error".to_string(),
+                status_code: 500,
+            })
+        };
+
+    // Convert output to string
+    let diff_str = match str::from_utf8(&output.stdout) {
+        Ok(s) => s.to_string(),
+        Err(e) => return HttpResponse::InternalServerError().json(ErrorResponse {
+            error: parse_error_message(&e.to_string()),
+            error_type: "encoding_error".to_string(),
+            status_code: 500,
+        })
+    };
+
+    HttpResponse::Ok().json(DiffResponse { diff: diff_str })
 }
 
 /*
@@ -270,6 +304,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
             .route("/chat", web::post().to(chat_handler))
             .service(clear_chat)
             .service(get_messages)
+            .service(get_diff)
             .service(index)
     })
     .bind(format!("{}:{}", host, port))?
