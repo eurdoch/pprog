@@ -82,6 +82,6 @@ impl std::error::Error for InferenceError {}
 
 #[async_trait]
 pub trait Inference {
-    async fn generate(&self, messages: &[Message]) -> Result<ModelResponse>;
+    async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError>;
     async fn generate_stream(&self, messages: &[Message]) -> Result<aws_sdk_bedrockruntime::types::ResponseStream>;
 }

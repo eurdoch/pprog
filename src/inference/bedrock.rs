@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use async_trait::async_trait;
 use aws_types::region::Region;
 
-use super::types::{Message, Role, ContentItem, ModelResponse, Usage, Inference};
+use super::types::{Message, Role, ContentItem, ModelResponse, Usage, Inference, InferenceError};
 
 pub struct AWSBedrockInference {
     client: Arc<BedrockClient>,
@@ -102,11 +102,18 @@ impl AWSBedrockInference {
 
 #[async_trait]
 impl Inference for AWSBedrockInference {
-    async fn generate(&self, messages: &[Message]) -> Result<ModelResponse> {
+    async fn query_model(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+        if let Some(sys_msg) = system_message {
+            messages.insert(0, Message {
+                role: Role::System,
+                content: vec![ContentItem::Text { text: sys_msg.to_string() }],
+            });
+        }
+
         let body = if self.model_id.contains("anthropic") {
             // Anthropic Claude models
             json!({
-                "prompt": self.prepare_anthropic_prompt(messages),
+                "prompt": self.prepare_anthropic_prompt(&messages),
                 "max_tokens_to_sample": self.max_tokens.unwrap_or(2000),
                 "temperature": self.temperature,
                 "top_p": 1,
@@ -115,13 +122,13 @@ impl Inference for AWSBedrockInference {
         } else if self.model_id.contains("meta") {
             // Meta Llama models
             json!({
-                "prompt": self.prepare_llama_prompt(messages),
+                "prompt": self.prepare_llama_prompt(&messages),
                 "max_gen_len": self.max_tokens.unwrap_or(2000),
                 "temperature": self.temperature,
                 "top_p": 0.9,
             })
         } else {
-            return Err(anyhow::anyhow!("Unsupported model: {}", self.model_id));
+            return Err(InferenceError::InvalidResponse(format!("Unsupported model: {}", self.model_id)));
         };
 
         let response = self.client
@@ -129,18 +136,24 @@ impl Inference for AWSBedrockInference {
             .model_id(&self.model_id)
             .accept("application/json")
             .content_type("application/json")
-            .body(Blob::new(serde_json::to_string(&body)?.into_bytes()))
+            .body(Blob::new(serde_json::to_string(&body).map_err(|e| 
+                InferenceError::SerializationError(e.to_string())
+            )?.into_bytes()))
             .send()
-            .await?;
+            .await
+            .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        let response_body: Value = serde_json::from_slice(&response.body.into_inner())?;
+        let response_body: Value = serde_json::from_slice(&response.body.into_inner())
+            .map_err(|e| InferenceError::InvalidResponse(e.to_string()))?;
         
         let content = if self.model_id.contains("anthropic") {
-            response_body["completion"].as_str().ok_or_else(|| anyhow::anyhow!("Invalid response format"))?
+            response_body["completion"].as_str()
+                .ok_or_else(|| InferenceError::InvalidResponse("Missing completion in response".to_string()))?
         } else if self.model_id.contains("meta") {
-            response_body["generation"].as_str().ok_or_else(|| anyhow::anyhow!("Invalid response format"))?
+            response_body["generation"].as_str()
+                .ok_or_else(|| InferenceError::InvalidResponse("Missing generation in response".to_string()))?
         } else {
-            return Err(anyhow::anyhow!("Unsupported model: {}", self.model_id));
+            return Err(InferenceError::InvalidResponse(format!("Unsupported model: {}", self.model_id)));
         };
 
         Ok(ModelResponse {
