@@ -7,6 +7,7 @@ use crate::{
         types::{ContentItem, Message, ModelResponse, Role},
         AnthropicInference,
         OpenAIInference,
+        DeepSeekInference,
     },
     tree::GitTree,
     config::ProjectConfig
@@ -17,6 +18,7 @@ static TOKENIZER_JSON: &[u8] = include_bytes!("../tokenizers/gpt2.json");
 pub enum InferenceProvider {
     Anthropic(AnthropicInference),
     OpenAI(OpenAIInference),
+    DeepSeek(DeepSeekInference),
 }
 
 impl InferenceProvider {
@@ -28,6 +30,9 @@ impl InferenceProvider {
             InferenceProvider::OpenAI(inference) => inference.query_model(messages, system_message)
                 .await
                 .map_err(|e| anyhow::anyhow!("OpenAI Inference Error: {}", e)),
+            InferenceProvider::DeepSeek(inference) => inference.query_model(messages, system_message)
+                .await
+                .map_err(|e| anyhow::anyhow!("DeepSeek Inference Error: {}", e)),
         }
     }
 }
@@ -47,6 +52,8 @@ impl Chat {
         // Dynamically choose inference provider based on configuration
         let inference = if config.base_url.contains("anthropic.com") {
             InferenceProvider::Anthropic(AnthropicInference::new())
+        } else if config.base_url.contains("deepseek.com") {
+            InferenceProvider::DeepSeek(DeepSeekInference::new())
         } else {
             InferenceProvider::OpenAI(OpenAIInference::new())
         };
