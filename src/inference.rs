@@ -198,7 +198,7 @@ impl Inference {
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        log::info!("Network response text: {}", response_text);
+        log::info!("Network response text: {:#?}", response_text);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
@@ -264,7 +264,7 @@ impl Inference {
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        log::info!("OpenAI API response text: {}", response_text);
+        log::info!("OpenAI API response text: {:#?}", response_text);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
