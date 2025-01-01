@@ -4,11 +4,9 @@ use tokenizers::Tokenizer;
 
 use crate::{
     inference::{
-        ContentItem,
-        Inference,
-        Message,
-        Role,
-        ModelResponse
+        types::{ContentItem, Message, ModelResponse, Role},
+        AnthropicInference,
+        OpenAIInference,
     },
     tree::GitTree,
     config::ProjectConfig
@@ -16,9 +14,27 @@ use crate::{
 
 static TOKENIZER_JSON: &[u8] = include_bytes!("../tokenizers/gpt2.json");
 
+pub enum InferenceProvider {
+    Anthropic(AnthropicInference),
+    OpenAI(OpenAIInference),
+}
+
+impl InferenceProvider {
+    async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, anyhow::Error> {
+        match self {
+            InferenceProvider::Anthropic(inference) => inference.query_model(messages, system_message)
+                .await
+                .map_err(|e| anyhow::anyhow!("Anthropic Inference Error: {}", e)),
+            InferenceProvider::OpenAI(inference) => inference.query_model(messages, system_message)
+                .await
+                .map_err(|e| anyhow::anyhow!("OpenAI Inference Error: {}", e)),
+        }
+    }
+}
+
 pub struct Chat {
     pub messages: Vec<Message>,
-    inference: Inference,
+    inference: InferenceProvider,
     tokenizer: Tokenizer,
     max_tokens: usize,
 }
@@ -27,9 +43,17 @@ impl Chat {
     pub fn new() -> Self {
         let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).expect("Failed to load tokenizer.");
         let config = ProjectConfig::load().unwrap_or_default();
+        
+        // Dynamically choose inference provider based on configuration
+        let inference = if config.base_url.contains("anthropic.com") {
+            InferenceProvider::Anthropic(AnthropicInference::new())
+        } else {
+            InferenceProvider::OpenAI(OpenAIInference::new())
+        };
+
         Self {
             messages: Vec::new(),
-            inference: Inference::new(),
+            inference,
             tokenizer,
             max_tokens: config.max_context,
         }
@@ -94,6 +118,7 @@ impl Chat {
                 &tree_string,
             );
             self.trim_messages_to_token_limit();
+            self.messages.push(message);
             
             let response = self.inference.query_model(self.messages.clone(), Some(&system_message)).await?;
             Ok(response)

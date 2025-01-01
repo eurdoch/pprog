@@ -5,7 +5,7 @@ use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use crate::chat::Chat;
-use crate::inference::{Message, Role, ContentItem, InferenceError};
+use crate::inference::types::{Message, Role, ContentItem, InferenceError};
 use std::sync::Mutex;
 use std::collections::HashMap;
 use actix_web::http;
@@ -116,12 +116,13 @@ async fn chat_handler(
     req: web::Json<ChatRequest>
 ) -> impl Responder {
     let mut chat = data.chat.lock().unwrap();
+    println!("chat_handler");
 
-    match &req.message.content[0] {
+    match &req.0.message.content[0] {
         ContentItem::Text { .. } => {
             let new_msg = Message {
                 role: Role::User,
-                content: vec![req.message.content[0].clone()]
+                content: vec![req.0.message.content[0].clone()]
             };
 
             chat.messages.push(new_msg.clone());
@@ -138,6 +139,7 @@ async fn chat_handler(
                     })
                 },
                 Err(e) => {
+                    println!("{:#?}", e);
                     // Pop the message off chat history on error
                     chat.messages.pop();
                     match e.downcast::<InferenceError>() {
@@ -152,7 +154,7 @@ async fn chat_handler(
             }
         },
         ContentItem::ToolUse { id, .. } => {
-            match chat.handle_tool_use(&req.message.content[0]).await {
+            match chat.handle_tool_use(&req.0.message.content[0]).await {
                 Ok(tool_use_result) => HttpResponse::Ok().json(ChatResponse {
                     message: Message {
                         role: Role::User,
@@ -177,7 +179,7 @@ async fn chat_handler(
         ContentItem::ToolResult { .. } => {
             let msg = Message {
                 role: Role::User,
-                content: req.message.content.clone(),
+                content: req.0.message.content.clone(),
             };
             // Push the message to chat history first
             chat.messages.push(msg.clone());
