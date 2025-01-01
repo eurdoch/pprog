@@ -21,15 +21,10 @@ struct AnthropicResponse {
     id: String,
     model: String,
     role: String,
-    content: Vec<AnthropicContentItem>,
+    content: Vec<ContentItem>,
     stop_reason: String,
     stop_sequence: Option<String>,
     usage: AnthropicUsage,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicContentItem {
-    text: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,7 +53,7 @@ impl std::default::Default for AnthropicInference {
             model: config.model,
             client: Client::new(),
             tooler: Tooler::new(),
-            base_url: "https://api.anthropic.com/v1".to_string(),
+            base_url: config.base_url,
             api_key: config.api_key,
             max_output_tokens: config.max_output_tokens,
         }
@@ -101,6 +96,8 @@ impl AnthropicInference {
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
+        let response_json: serde_json::Value = serde_json::from_str(&response_text).unwrap();
+        log::info!("{:#?}", response_json);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
@@ -110,11 +107,7 @@ impl AnthropicInference {
             .map_err(|e| InferenceError::InvalidResponse(e.to_string()))?;
 
         Ok(ModelResponse {
-            content: vec![ContentItem::Text {
-                text: anthropic_response.content.first()
-                    .map(|item| item.text.clone())
-                    .unwrap_or_default()
-            }],
+            content: anthropic_response.content,
             id: anthropic_response.id,
             model: anthropic_response.model,
             role: anthropic_response.role,
