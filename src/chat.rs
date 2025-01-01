@@ -97,7 +97,7 @@ impl Chat {
             .ok_or_else(|| anyhow::anyhow!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
     }
 
-    pub async fn send_message(&mut self, message: Message) -> Result<ModelResponse, anyhow::Error> {
+    pub async fn send_message(&mut self, message: Message) -> Result<Message, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;
             let system_message = format!(
@@ -120,8 +120,20 @@ impl Chat {
             self.trim_messages_to_token_limit();
             self.messages.push(message);
             
-            let response = self.inference.query_model(self.messages.clone(), Some(&system_message)).await?;
-            Ok(response)
+            match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
+                Ok(response) => {
+                    let new_msg = Message {
+                        role: Role::Assistant,
+                        content: response.content.clone()
+                    };
+                    self.messages.push(new_msg.clone());
+                    Ok(new_msg)
+                },
+                Err(e) => {
+                    self.messages.pop();
+                    Err(e)
+                }
+            }
         } else {
             Err(anyhow::anyhow!("Can only send messages with user role when querying model."))
         }

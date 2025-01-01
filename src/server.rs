@@ -111,12 +111,25 @@ async fn clear_chat(data: web::Data<AppState>) -> impl Responder {
     HttpResponse::Ok().json(json!({"cleared": true, "message": "Chat history cleared"}))
 }
 
+/*
+    * The handler works by bouncing messages back and forth from client in a sequential manner.
+    *
+    * When new text input from client arrives, message is sent to third party API and response
+    * then forwared to client.  If the client receives a tool_use (or tool_call for DeepSeek) then
+    * it will immediately send back a tool_use message and this handler will NOT query third party
+    * API and instead handle the tool use.  The tool_result is then send back to client, processed
+    * by client and immediately sent back to third party API.  That response is then forwarded to
+    * client and this continues until there are no more tool_use messages.
+    *
+    * The messages coming from client are of type Message but are guaranteed to only have a single
+    * content item.
+    *
+*/
 async fn chat_handler(
     data: web::Data<AppState>, 
     req: web::Json<ChatRequest>
 ) -> impl Responder {
     let mut chat = data.chat.lock().unwrap();
-    println!("chat_handler");
 
     match &req.0.message.content[0] {
         ContentItem::Text { .. } => {
@@ -125,23 +138,13 @@ async fn chat_handler(
                 content: vec![req.0.message.content[0].clone()]
             };
 
-            chat.messages.push(new_msg.clone());
             match chat.send_message(new_msg).await {
-                Ok(response) => {
-                    let ai_message = Message {
-                        role: Role::Assistant,
-                        content: response.content.clone()
-                    };
-                    chat.messages.push(ai_message.clone());
-                    
+                Ok(returned_msg) => {
                     HttpResponse::Ok().json(ChatResponse {
-                        message: ai_message,
+                        message: returned_msg,
                     })
                 },
                 Err(e) => {
-                    println!("{:#?}", e);
-                    // Pop the message off chat history on error
-                    chat.messages.pop();
                     match e.downcast::<InferenceError>() {
                         Ok(inference_error) => handle_inference_error(inference_error),
                         Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {
@@ -167,7 +170,6 @@ async fn chat_handler(
                     }
                 }),
                 Err(e) => {
-                    chat.messages.pop();
                     HttpResponse::InternalServerError().json(ErrorResponse {
                         error: parse_error_message(&e.to_string()),
                         error_type: "tool_error".to_string(),
@@ -181,24 +183,14 @@ async fn chat_handler(
                 role: Role::User,
                 content: req.0.message.content.clone(),
             };
-            // Push the message to chat history first
-            chat.messages.push(msg.clone());
             
             match chat.send_message(msg).await {
-                Ok(response) => {
-                    let ai_message = Message {
-                        role: Role::Assistant,
-                        content: response.content.clone()
-                    };
-                    chat.messages.push(ai_message.clone());
-                    
+                Ok(returned_msg) => {
                     HttpResponse::Ok().json(ChatResponse {
-                        message: ai_message,
+                        message: returned_msg,
                     })
                 },
                 Err(e) => {
-                    // Pop the message off chat history on error
-                    chat.messages.pop();
                     match e.downcast::<InferenceError>() {
                         Ok(inference_error) => handle_inference_error(inference_error),
                         Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {
