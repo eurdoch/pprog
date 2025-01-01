@@ -117,12 +117,12 @@ async fn clear_chat(data: web::Data<AppState>) -> impl Responder {
     * When new text input from client arrives, message is sent to third party API and response
     * then forwared to client.  If the client receives a tool_use (or tool_call for DeepSeek) then
     * it will immediately send back a tool_use message and this handler will NOT query third party
-    * API and instead handle the tool use.  The tool_result is then send back to client, processed
+    * API and instead handle the tool use.  The tool_result is then sent back to client, processed
     * by client and immediately sent back to third party API.  That response is then forwarded to
     * client and this continues until there are no more tool_use messages.
     *
-    * The messages coming from client are of type Message but are guaranteed to only have a single
-    * content item.
+    * The messages coming from client are of type Message to make parsing easier but are guaranteed 
+    * to only have a single content item when sent by client.
     *
 */
 async fn chat_handler(

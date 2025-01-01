@@ -93,8 +93,11 @@ function App() {
       if (!response.ok) {
         // TODO fix backend error iwthin error
         const data = await response.json();
-        alert(`${data.error.error.message}`);
-        throw new Error(data.error.error.message);
+        console.error(data);
+        setIsProcessing(false);
+        return;
+        //alert(`${data.error.error.message}`);
+        //throw new Error(data.error.error.message);
       }
 
       const data = await response.json();
@@ -130,6 +133,7 @@ function App() {
       }
 
     } catch (error: any) {
+      console.error(error);
       setIsProcessing(false);
     }
   };

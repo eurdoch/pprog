@@ -31,10 +31,47 @@ struct OpenAIChoice {
     finish_reason: String,
 }
 
+fn deserialize_content<'de, D>(deserializer: D) -> Result<Vec<ContentItem>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum ContentWrapper {
+        String(String),
+        Null,
+        Array(Vec<ContentItem>),
+    }
+
+    let wrapper = ContentWrapper::deserialize(deserializer)?;
+    match wrapper {
+        ContentWrapper::String(s) => Ok(vec![ContentItem::Text { text: s }]),
+        ContentWrapper::Null => Ok(vec![]),
+        ContentWrapper::Array(v) => Ok(v),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct OpenAIMessage {
     role: String,
+    #[serde(deserialize_with = "deserialize_content")]
     content: Vec<ContentItem>,
+    #[serde(default)]
+    tool_calls: Option<Vec<OpenAIToolCall>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAIToolCall {
+    id: String,
+    #[serde(rename = "type")]
+    call_type: String,
+    function: OpenAIFunctionCall,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAIFunctionCall {
+    name: String,
+    arguments: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -269,11 +306,31 @@ impl OpenAIInference {
             return Err(InferenceError::InvalidResponse("No choices in OpenAI response".to_string()));
         }
 
+        let first_choice = &openai_response.choices[0].message;
+        let mut content = first_choice.content.clone();
+
+        // Handle tool calls if present
+        if let Some(tool_calls) = &first_choice.tool_calls {
+            for tool_call in tool_calls {
+                if tool_call.call_type == "function" {
+                    // Parse the arguments as JSON Value
+                    let input: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+                        .map_err(|e| InferenceError::SerializationError(format!("Failed to parse tool arguments: {}", e)))?;
+
+                    content.push(ContentItem::ToolUse {
+                        id: tool_call.id.clone(),
+                        name: tool_call.function.name.clone(),
+                        input,
+                    });
+                }
+            }
+        }
+
         Ok(ModelResponse {
-            content: openai_response.choices[0].message.content.clone(),
+            content,
             id: openai_response.id,
             model: openai_response.model,
-            role: openai_response.choices[0].message.role.clone(),
+            role: first_choice.role.clone(),
             message_type: "text".to_string(),
             stop_reason: openai_response.choices[0].finish_reason.clone(),
             stop_sequence: None,
