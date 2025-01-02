@@ -5,7 +5,6 @@ use aws_sdk_bedrockruntime::types::ResponseStream;
 use aws_sdk_bedrockruntime::Client as BedrockClient;
 use aws_sdk_bedrockruntime::primitives::Blob;
 use serde_json::{json, Value};
-use async_trait::async_trait;
 use aws_types::region::Region;
 
 use super::types::{Message, Role, ContentItem, ModelResponse, Usage, Inference, InferenceError};
@@ -100,7 +99,6 @@ impl AWSBedrockInference {
     }
 }
 
-#[async_trait]
 impl Inference for AWSBedrockInference {
     async fn query_model(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         if let Some(sys_msg) = system_message {
