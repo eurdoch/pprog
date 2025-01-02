@@ -307,6 +307,7 @@ const App: React.FC = () => {
       let data = await response.json();
       if (data.cleared) {
         setMessages([]);
+        setShowFab(false);
         alert("Chat cleared successfully.");
       } else {
         alert("Something went wrong, chat not cleared.");
