@@ -168,6 +168,7 @@ function App() {
   const handleEnterMessage = async (_e: any) => {
     try {
       if (inputMessage.trim() === '') return;
+      setShowFab(false);
       setIsProcessing(true);
       
       const userMessage: Message = {
@@ -185,7 +186,7 @@ function App() {
       setIsProcessing(false);
     } finally {
       setIsProcessing(false);
-      setShowFab(true);  // Show FAB after request completes
+      setShowFab(true);
     }
   }
 
