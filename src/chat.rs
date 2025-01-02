@@ -60,9 +60,8 @@ impl Chat {
             "deepseek" => InferenceProvider::DeepSeek(DeepSeekInference::new()),
             "bedrock" => {
                 let bedrock_inference = AWSBedrockInference::new(
-                    Some(config.base_url.clone()),  // region
                     config.model.clone(),           // model_id
-                    0.7,                            // temperature 
+                    0.2,                            // temperature 
                     Some(config.max_output_tokens as i32), // max_tokens
                 ).await.expect("Failed to initialize Bedrock inference");
                 InferenceProvider::Bedrock(bedrock_inference)

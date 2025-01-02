@@ -5,12 +5,11 @@ use aws_sdk_bedrockruntime::types::ResponseStream;
 use aws_sdk_bedrockruntime::Client as BedrockClient;
 use aws_sdk_bedrockruntime::primitives::Blob;
 use serde_json::{json, Value};
-use aws_types::region::Region;
 
 use super::types::{Message, Role, ContentItem, ModelResponse, Usage, Inference, InferenceError};
 
 pub struct AWSBedrockInference {
-    client: Arc<BedrockClient>,
+    client: Arc<BedrockClient>, // TODO Arc is probably not necessary
     model_id: String,
     temperature: f32,
     max_tokens: Option<i32>,
@@ -18,16 +17,11 @@ pub struct AWSBedrockInference {
 
 impl AWSBedrockInference {
     pub async fn new(
-        region: Option<String>,
         model_id: String,
         temperature: f32,
         max_tokens: Option<i32>,
     ) -> Result<Self> {
-        let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region(region.map(Region::new))
-            .load()
-            .await;
-        
+        let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
         let client = Arc::new(BedrockClient::new(&config));
 
         Ok(Self {
