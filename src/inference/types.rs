@@ -34,6 +34,7 @@ pub enum Role {
     User,
     Assistant,
     System,
+    Developer, // because OpenAI just had to change the system name
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

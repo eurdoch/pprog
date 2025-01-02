@@ -238,7 +238,7 @@ impl OpenAIInference {
 
         if let Some(sys_msg) = system_message {
             messages.insert(0, Message {
-                role: Role::System,
+                role: Role::Developer,
                 content: vec![ContentItem::Text { text: sys_msg.to_string() }],
             });
         }
@@ -259,6 +259,7 @@ impl OpenAIInference {
                     Role::User => "user",
                     Role::Assistant => "assistant",
                     Role::System => "system",
+                    Role::Developer => "developer",
                 },
                 "content": content
             })

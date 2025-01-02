@@ -259,6 +259,7 @@ impl DeepSeekInference {
                     Role::User => "user",
                     Role::Assistant => "assistant",
                     Role::System => "system",
+                    Role::Developer => "developer",
                 },
                 "content": content
             })
