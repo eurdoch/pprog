@@ -45,7 +45,6 @@ function parseDiff(diffContent: string): FileChange[] {
   let lineNumber = 0;
 
   for (const line of lines) {
-    // New file
     if (line.startsWith('diff --git')) {
       if (currentFile) {
         files.push(currentFile);
@@ -56,7 +55,6 @@ function parseDiff(diffContent: string): FileChange[] {
         changes: []
       };
     }
-    // Added line
     else if (line.startsWith('+') && !line.startsWith('+++')) {
       currentFile?.changes.push({
         type: 'added',
@@ -64,7 +62,6 @@ function parseDiff(diffContent: string): FileChange[] {
         lineNumber: ++lineNumber
       });
     }
-    // Removed line
     else if (line.startsWith('-') && !line.startsWith('---')) {
       currentFile?.changes.push({
         type: 'removed',
@@ -85,20 +82,33 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showFab, setShowFab] = useState(true);
+  const [showFab, setShowFab] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [diffFiles, setDiffFiles] = useState<FileChange[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
+  // Auto-resize textarea
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; // Max height of 200px
+    }
+  };
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [inputMessage]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Fetch and parse diff data when showFab becomes true
   useEffect(() => {
     if (showFab) {
       const fetchAndParseDiff = async () => {
@@ -146,12 +156,20 @@ function App() {
     setShowModal(false);
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!isProcessing) {
+        handleEnterMessage(e);
+      }
+    }
+  };
+
   const handleEnterMessage = async (_e: any) => {
     try {
       if (inputMessage.trim() === '') return;
       setIsProcessing(true);
-      setShowFab(false);
-
+      
       const userMessage: Message = {
         role: "user",
         content: [
@@ -167,7 +185,7 @@ function App() {
       setIsProcessing(false);
     } finally {
       setIsProcessing(false);
-      setShowFab(true);
+      setShowFab(true);  // Show FAB after request completes
     }
   }
 
@@ -287,7 +305,7 @@ function App() {
         <div className="modal-overlay" onClick={handleModalClose}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={handleModalClose}>×</button>
-            <h2>Changed Files</h2>
+            <h2>Current diff</h2>
             <div className="diff-content">
               {diffFiles && diffFiles.length > 0 ? (
                 diffFiles.map((file, fileIndex) => (
@@ -314,16 +332,17 @@ function App() {
         </div>
       )}
       <div className="chat-input">
-        <input 
-          type="text" 
+        <textarea 
+          ref={textareaRef}
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && !isProcessing && handleEnterMessage(e)}
+          onKeyDown={handleKeyPress}
           placeholder="Type your message..."
+          rows={1}
         />
         <button 
           onClick={handleEnterMessage} 
-          disabled={isProcessing}
+          disabled={isProcessing || inputMessage.trim() === ''}
           className={`send-button ${isProcessing ? 'processing' : ''}`}
         >
           Send
