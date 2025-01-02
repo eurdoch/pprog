@@ -1,5 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import './App.css'
+import './styles/base.css'
+import './styles/chat-container.css'
+import './styles/input.css'
+import './styles/fab.css'
+import './styles/modal.css'
 
 interface Text {
   type: "text",

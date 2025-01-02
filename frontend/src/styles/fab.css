@@ -1,0 +1,64 @@
+.fab {
+  position: fixed;
+  bottom: 90px;
+  right: 24px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 
+    0 6px 16px rgba(16, 185, 129, 0.3),
+    0 2px 8px rgba(16, 185, 129, 0.2),
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(16, 185, 129, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  padding: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fabSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  z-index: 1000;
+  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.3));
+}
+
+.fab::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.fab:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 
+    0 8px 20px rgba(16, 185, 129, 0.4),
+    0 4px 12px rgba(16, 185, 129, 0.3),
+    inset 0 1px rgba(255, 255, 255, 0.15),
+    0 0 0 1px rgba(16, 185, 129, 0.15);
+  background: linear-gradient(135deg, #34d399, #10b981);
+  filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.4));
+}
+
+.fab:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 
+    0 4px 12px rgba(16, 185, 129, 0.3),
+    0 2px 6px rgba(16, 185, 129, 0.2),
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(16, 185, 129, 0.1);
+}
