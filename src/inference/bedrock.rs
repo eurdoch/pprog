@@ -74,6 +74,28 @@ impl AWSBedrockInference {
 
     fn prepare_llama_prompt(&self, messages: &[Message]) -> String {
         let mut prompt = String::new();
+        let mut system_content = String::new();
+
+        // Collect and prepare system message first
+        for msg in messages {
+            if msg.role == Role::System {
+                let content = msg.content.iter()
+                    .filter_map(|item| match item {
+                        ContentItem::Text { text } => Some(text.as_str()),
+                        _ => None
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                system_content.push_str(&content);
+            }
+        }
+
+        // Add system message block if not empty
+        if !system_content.is_empty() {
+            prompt.push_str(&format!("[INST] <<SYS>>\n{}\n<</SYS>>\n\n", system_content));
+        }
+
+        // Process other messages
         for msg in messages {
             let content = msg.content.iter()
                 .filter_map(|item| match item {
@@ -84,11 +106,12 @@ impl AWSBedrockInference {
                 .join(" ");
             
             match msg.role {
-                Role::System => prompt.push_str(&format!("[INST] <<SYS>>\n{}\n<</SYS>>\n\n", content)),
+                Role::System => continue, // Already handled
                 Role::User => prompt.push_str(&format!("{} [/INST]", content)),
                 Role::Assistant => prompt.push_str(&format!("{}\n\n[INST]", content)),
             }
         }
+        
         prompt
     }
 }
