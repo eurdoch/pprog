@@ -4,10 +4,11 @@ use tokenizers::Tokenizer;
 
 use crate::{
     inference::{
-        types::{ContentItem, Message, ModelResponse, Role},
+        types::{ContentItem, Message, ModelResponse, Role, Inference},
         AnthropicInference,
         OpenAIInference,
         DeepSeekInference,
+        AWSBedrockInference,
     },
     tree::GitTree,
     config::ProjectConfig
@@ -19,6 +20,7 @@ pub enum InferenceProvider {
     Anthropic(AnthropicInference),
     OpenAI(OpenAIInference),
     DeepSeek(DeepSeekInference),
+    Bedrock(AWSBedrockInference),
 }
 
 impl InferenceProvider {
@@ -33,6 +35,9 @@ impl InferenceProvider {
             InferenceProvider::DeepSeek(inference) => inference.query_model(messages, system_message)
                 .await
                 .map_err(|e| anyhow::anyhow!("DeepSeek Inference Error: {}", e)),
+            InferenceProvider::Bedrock(inference) => inference.query_model(messages, system_message)
+                .await
+                .map_err(|e| anyhow::anyhow!("Bedrock Inference Error: {}", e)),
         }
     }
 }
@@ -45,17 +50,24 @@ pub struct Chat {
 }
 
 impl Chat {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).expect("Failed to load tokenizer.");
         let config = ProjectConfig::load().unwrap_or_default();
         
         // Dynamically choose inference provider based on configuration
-        let inference = if config.base_url.contains("anthropic.com") {
-            InferenceProvider::Anthropic(AnthropicInference::new())
-        } else if config.base_url.contains("deepseek.com") {
-            InferenceProvider::DeepSeek(DeepSeekInference::new())
-        } else {
-            InferenceProvider::OpenAI(OpenAIInference::new())
+        let inference = match config.provider.as_str() {
+            "anthropic" => InferenceProvider::Anthropic(AnthropicInference::new()),
+            "deepseek" => InferenceProvider::DeepSeek(DeepSeekInference::new()),
+            "bedrock" => {
+                let bedrock_inference = AWSBedrockInference::new(
+                    Some(config.base_url.clone()),  // region
+                    config.model.clone(),           // model_id
+                    0.7,                            // temperature 
+                    Some(config.max_output_tokens as i32), // max_tokens
+                ).await.expect("Failed to initialize Bedrock inference");
+                InferenceProvider::Bedrock(bedrock_inference)
+            },
+            _ => InferenceProvider::OpenAI(OpenAIInference::new()),
         };
 
         Self {

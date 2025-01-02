@@ -4,13 +4,14 @@ use handlebars::Handlebars;
 use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use crate::chat::Chat;
-use crate::inference::types::{Message, Role, ContentItem, InferenceError};
 use std::sync::Mutex;
 use std::collections::HashMap;
 use actix_web::http;
 use std::process::Command;
 use std::str;
+
+use crate::chat::Chat;
+use crate::inference::types::{Message, Role, ContentItem, InferenceError};
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
@@ -41,6 +42,7 @@ pub struct AppState {
 
 static DIST_DIR: Dir = include_dir!("./frontend/dist/");
 
+// Rest of the existing code remains the same
 fn get_mime_type(filename: &str) -> &'static str {
     match filename {
         f if f.ends_with(".html") => "text/html; charset=utf-8",
@@ -278,7 +280,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     process_files(&DIST_DIR, "", &mut static_files, &mut hbs, &template_data);
 
     let app_state = web::Data::new(AppState {
-        chat: Mutex::new(Chat::new()),
+        chat: Mutex::new(Chat::new().await),
         static_files,
     });
 
