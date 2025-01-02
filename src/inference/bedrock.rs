@@ -72,30 +72,14 @@ impl AWSBedrockInference {
         prompt
     }
 
-    fn prepare_llama_prompt(&self, messages: &[Message]) -> String {
+    fn prepare_llama_prompt(&self, messages: &[Message], external_system_message: Option<&str>) -> String {
         let mut prompt = String::new();
-        let mut system_content = String::new();
 
-        // Collect and prepare system message first
-        for msg in messages {
-            if msg.role == Role::System {
-                let content = msg.content.iter()
-                    .filter_map(|item| match item {
-                        ContentItem::Text { text } => Some(text.as_str()),
-                        _ => None
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                system_content.push_str(&content);
-            }
+        // First, check external system message
+        if let Some(sys_msg) = external_system_message {
+            prompt.push_str(&format!("[INST] <<SYS>>\n{}\n<</SYS>>\n\n", sys_msg));
         }
 
-        // Add system message block if not empty
-        if !system_content.is_empty() {
-            prompt.push_str(&format!("[INST] <<SYS>>\n{}\n<</SYS>>\n\n", system_content));
-        }
-
-        // Process other messages
         for msg in messages {
             let content = msg.content.iter()
                 .filter_map(|item| match item {
@@ -118,14 +102,15 @@ impl AWSBedrockInference {
 
 impl Inference for AWSBedrockInference {
     async fn query_model(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
-        if let Some(sys_msg) = system_message {
-            messages.insert(0, Message {
-                role: Role::System,
-                content: vec![ContentItem::Text { text: sys_msg.to_string() }],
-            });
-        }
-
         let body = if self.model_id.contains("anthropic") {
+            // For Anthropic, add system message to messages if provided
+            if let Some(sys_msg) = system_message {
+                messages.insert(0, Message {
+                    role: Role::System,
+                    content: vec![ContentItem::Text { text: sys_msg.to_string() }],
+                });
+            }
+
             // Anthropic Claude models
             json!({
                 "prompt": self.prepare_anthropic_prompt(&messages),
@@ -137,7 +122,7 @@ impl Inference for AWSBedrockInference {
         } else if self.model_id.contains("meta") {
             // Meta Llama models
             json!({
-                "prompt": self.prepare_llama_prompt(&messages),
+                "prompt": self.prepare_llama_prompt(&messages, system_message),
                 "max_gen_len": self.max_tokens.unwrap_or(2000),
                 "temperature": self.temperature,
                 "top_p": 0.9,
@@ -160,6 +145,7 @@ impl Inference for AWSBedrockInference {
 
         let response_body: Value = serde_json::from_slice(&response.body.into_inner())
             .map_err(|e| InferenceError::InvalidResponse(e.to_string()))?;
+        println!("{:#?}", response_body);
         
         let content = if self.model_id.contains("anthropic") {
             response_body["completion"].as_str()
