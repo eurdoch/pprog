@@ -133,6 +133,8 @@ const App: React.FC = () => {
   const [showFab, setShowFab] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [diffFiles, setDiffFiles] = useState<FileChange[]>([]);
+  const [recursiveCallCount, setRecursiveCallCount] = useState(0);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -188,8 +190,10 @@ const App: React.FC = () => {
         }
         const data = await response.json();
         setMessages(data);
+        setInitialLoadComplete(true);
       } catch (error) {
         console.error('Error fetching messages:', error);
+        setInitialLoadComplete(true);
       }
     };
 
@@ -234,12 +238,14 @@ const App: React.FC = () => {
       setIsProcessing(false);
     } finally {
       setIsProcessing(false);
-      setShowFab(true);
     }
   }
 
   const handleSendMessage = async (message: Message) => {
     try {
+      // Increment recursive call count
+      setRecursiveCallCount(prev => prev + 1);
+
       const response = await fetch(`${window.SERVER_URL}/chat`, {
         method: 'POST',
         headers: {
@@ -284,12 +290,23 @@ const App: React.FC = () => {
             break;
         }
       }
-
     } catch (error: any) {
       console.error(error);
       setIsProcessing(false);
+    } finally {
+      // Decrement recursive call count
+      setRecursiveCallCount(prev => prev - 1);
     }
   };
+
+  // Show FAB only when all recursive calls are complete, not processing, and initial load is complete
+  useEffect(() => {
+    if (initialLoadComplete && recursiveCallCount === 0 && !isProcessing && messages.length > 0) {
+      setShowFab(true);
+    } else {
+      setShowFab(false);
+    }
+  }, [recursiveCallCount, isProcessing, initialLoadComplete, messages]);
 
   const handleClearChat = async (_e: any) => {
     try {
