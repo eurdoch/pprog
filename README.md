@@ -1,6 +1,8 @@
 # p(air) prog(rammer)
 pprog is an LLM based pair programmer for working on coding projects.  it can generate, edit and answer questions about your code.
 
+This is experimental and unstable code, it may change at any time.
+
 ## prereqs
 - Rust (cargo)
 - Browser
@@ -59,7 +61,6 @@ compile_check - check for compilation errors, or for interpreted programs checks
 ```
 
 # tips and warnings
-- This is experimental and unstable code, it may change at any time.
 - The system prompt includes instructions to not change any files outside of the root of the project but this is not strictly guaranteed.  Proceed with caution!
 - If using Anthropic/OpenAI models it can get expensive, but is usually very effective.  When using Sonnet 3.5 a single code change request routinely cost 0.20 USD or more.  This is because the program is constantly reading/writing entire files to satisfy each request.  I shudder to use Opus and haven't even tried.  Haiku 3.5 seems to be a good trade-off, usually costing a few cents per change of a medium sized project.  I normally use Haiku.  DeepSeek is dirt cheap but doesn't seem effective at all.  OpenAI models can be effective, but usually get throttled by rate limits almost immediately.
 - Make sure to commit and push changes frequently.  It's ok to sometimes make multiple changes before committing but if it's going to be a large change then best to commit before making them.
