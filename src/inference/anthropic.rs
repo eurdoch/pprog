@@ -5,7 +5,7 @@ use anyhow::Result;
 
 use crate::config::ProjectConfig;
 use super::types::{
-    ContentItem, InferenceError, Message, ModelResponse, Usage
+    ContentItem, InferenceError, Message, ModelResponse
 };
 use super::tools::{AnthropicTool, InputSchema, PropertySchema};
 
@@ -26,13 +26,6 @@ struct AnthropicResponse {
     content: Vec<ContentItem>,
     stop_reason: String,
     stop_sequence: Option<String>,
-    usage: AnthropicUsage,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicUsage {
-    input_tokens: i32,
-    output_tokens: i32,
 }
 
 pub struct AnthropicInference {
@@ -222,12 +215,12 @@ impl AnthropicInference {
             message_type: "text".to_string(),
             stop_reason: anthropic_response.stop_reason,
             stop_sequence: anthropic_response.stop_sequence,
-            usage: Usage {
-                input_tokens: anthropic_response.usage.input_tokens,
-                cache_creation_input_tokens: 0,
-                cache_read_input_tokens: 0,
-                output_tokens: anthropic_response.usage.output_tokens,
-            },
+            //usage: Some(Usage {
+            //    input_tokens: anthropic_response.usage.input_tokens,
+            //    cache_creation_input_tokens: 0,
+            //    cache_read_input_tokens: 0,
+            //    output_tokens: anthropic_response.usage.output_tokens,
+            //}),
         })
     }
 }

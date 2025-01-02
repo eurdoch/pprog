@@ -5,7 +5,7 @@ use anyhow::Result;
 
 use crate::config::ProjectConfig;
 use super::types::{
-    ContentItem, InferenceError, Message, ModelResponse, Role, Usage
+    ContentItem, InferenceError, Message, ModelResponse, Role
 };
 use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
 
@@ -20,20 +20,14 @@ struct DeepSeekRequest {
 #[derive(Debug, Deserialize)]
 struct DeepSeekResponse {
     id: String,
-    created: i64,
     model: String,
-    system_fingerprint: String,
-    object: String,
     choices: Vec<DeepSeekChoice>,
-    usage: DeepSeekUsage,
 }
 
 #[derive(Debug, Deserialize)]
 struct DeepSeekChoice {
     finish_reason: String,
-    index: i32,
     message: DeepSeekMessage,
-    logprobs: Option<serde_json::Value>,
 }
 
 fn deserialize_content<'de, D>(deserializer: D) -> Result<Vec<ContentItem>, D::Error>
@@ -77,15 +71,6 @@ struct DeepSeekToolCall {
 struct DeepSeekFunctionCall {
     name: String,
     arguments: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct DeepSeekUsage {
-    completion_tokens: i32,
-    prompt_tokens: i32,
-    prompt_cache_hit_tokens: i32,
-    prompt_cache_miss_tokens: i32,
-    total_tokens: i32,
 }
 
 pub struct DeepSeekInference {
@@ -342,12 +327,12 @@ impl DeepSeekInference {
             message_type: "text".to_string(),
             stop_reason: deepseek_response.choices[0].finish_reason.clone(),
             stop_sequence: None,
-            usage: Usage {
-                input_tokens: deepseek_response.usage.prompt_tokens,
-                output_tokens: deepseek_response.usage.completion_tokens,
-                cache_creation_input_tokens: deepseek_response.usage.prompt_cache_miss_tokens,
-                cache_read_input_tokens: deepseek_response.usage.prompt_cache_hit_tokens,
-            },
+            //usage: Some(Usage {
+            //    input_tokens: deepseek_response.usage.prompt_tokens,
+            //    output_tokens: deepseek_response.usage.completion_tokens,
+            //    cache_creation_input_tokens: deepseek_response.usage.prompt_cache_miss_tokens,
+            //    cache_read_input_tokens: deepseek_response.usage.prompt_cache_hit_tokens,
+            //}),
         })
     }
 }

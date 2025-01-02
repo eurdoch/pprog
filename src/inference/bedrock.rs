@@ -1,15 +1,16 @@
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use anyhow::Result;
-use aws_sdk_bedrockruntime::types::ResponseStream;
 use aws_sdk_bedrockruntime::Client as BedrockClient;
 use aws_sdk_bedrockruntime::primitives::Blob;
-use serde_json::{json, Value};
+use serde_json::json;
 
-use super::types::{Message, Role, ContentItem, ModelResponse, Usage, Inference, InferenceError};
+use super::types::{Message, ModelResponse, Inference, InferenceError};
+use super::tools::{AnthropicTool, InputSchema, PropertySchema};
 
 pub struct AWSBedrockInference {
-    client: Arc<BedrockClient>, // TODO Arc is probably not necessary
+    client: Arc<BedrockClient>, 
     model_id: String,
     temperature: f32,
     max_tokens: Option<i32>,
@@ -32,100 +33,131 @@ impl AWSBedrockInference {
         })
     }
 
-    fn prepare_anthropic_prompt(&self, messages: &[Message]) -> String {
-        let mut prompt = String::new();
-        for msg in messages {
-            match msg.role {
-                Role::System => {
-                    let content = msg.content.iter()
-                        .filter_map(|item| match item {
-                            ContentItem::Text { text } => Some(text.as_str()),
-                            _ => None
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    prompt.push_str(&format!("\n\nSystem: {}", content));
-                },
-                Role::User => {
-                    let content = msg.content.iter()
-                        .filter_map(|item| match item {
-                            ContentItem::Text { text } => Some(text.as_str()),
-                            _ => None
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    prompt.push_str(&format!("\n\nHuman: {}", content));
-                },
-                Role::Assistant => {
-                    let content = msg.content.iter()
-                        .filter_map(|item| match item {
-                            ContentItem::Text { text } => Some(text.as_str()),
-                            _ => None
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    prompt.push_str(&format!("\n\nAssistant: {}", content));
-                },
-            }
-        }
-        prompt.push_str("\n\nAssistant: ");
-        prompt
+    fn get_anthropic_tools(&self) -> Vec<AnthropicTool> {
+        vec![
+            self.read_file_tool(),
+            self.write_file_tool(),
+            self.execute_tool(),
+            self.compile_check_tool(),
+        ]
     }
 
-    fn prepare_llama_prompt(&self, messages: &[Message], external_system_message: Option<&str>) -> String {
-        let mut prompt = String::new();
-
-        // First, check external system message
-        if let Some(sys_msg) = external_system_message {
-            prompt.push_str(&format!("[INST] <<SYS>>\n{}\n<</SYS>>\n\n", sys_msg));
+    fn read_file_tool(&self) -> AnthropicTool {
+        AnthropicTool {
+            name: "read_file".to_string(),
+            description: "Read file as string using path relative to root directory of project.".to_string(),
+            input_schema: InputSchema {
+                schema_type: "object".to_string(),
+                properties: {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "path".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The file path relative to the project root directory".to_string(),
+                        },
+                    );
+                    map
+                },
+                required: vec!["path".to_string()],
+            },
         }
+    }
 
-        for msg in messages {
-            let content = msg.content.iter()
-                .filter_map(|item| match item {
-                    ContentItem::Text { text } => Some(text.as_str()),
-                    _ => None
-                })
-                .collect::<Vec<_>>()
-                .join(" ");
-            
-            match msg.role {
-                Role::System => continue, // Already handled
-                Role::User => prompt.push_str(&format!("{} [/INST]", content)),
-                Role::Assistant => prompt.push_str(&format!("{}\n\n[INST]", content)),
-            }
+    fn write_file_tool(&self) -> AnthropicTool {
+        AnthropicTool {
+            name: "write_file".to_string(),
+            description: "Write string to file at path relative to root directory of project.".to_string(),
+            input_schema: InputSchema {
+                schema_type: "object".to_string(),
+                properties: {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "path".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The file path relative to the project root directory".to_string(),
+                        },
+                    );
+                    map.insert(
+                        "content".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The content to write to the file".to_string(),
+                        },
+                    );
+                    map
+                },
+                required: vec!["path".to_string(), "content".to_string()],
+            },
         }
-        
-        prompt
+    }
+
+    fn execute_tool(&self) -> AnthropicTool {
+        AnthropicTool {
+            name: "execute".to_string(),
+            description: "Execute bash statements as a single string..".to_string(),
+            input_schema: InputSchema {
+                schema_type: "object".to_string(),
+                properties: {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "statement".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The bash statement to be executed.".to_string(),
+                        },
+                    );
+                    map
+                },
+                required: vec!["statement".to_string()],
+            },
+        }
+    }
+
+    fn compile_check_tool(&self) -> AnthropicTool {
+        AnthropicTool {
+            name: "compile_check".to_string(),
+            description: "Check if project compiles or runs without error.".to_string(),
+            input_schema: InputSchema {
+                schema_type: "object".to_string(),
+                properties: {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "cmd".to_string(),
+                        PropertySchema {
+                            property_type: "string".to_string(),
+                            description: "The command to check for compiler/interpreter errors.".to_string(),
+                        },
+                    );
+                    map
+                },
+                required: vec!["cmd".to_string()],
+            },
+        }
     }
 }
 
 impl Inference for AWSBedrockInference {
-    async fn query_model(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+    async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         let body = if self.model_id.contains("anthropic") {
-            // For Anthropic, add system message to messages if provided
-            if let Some(sys_msg) = system_message {
-                messages.insert(0, Message {
-                    role: Role::System,
-                    content: vec![ContentItem::Text { text: sys_msg.to_string() }],
-                });
-            }
-
             // Anthropic Claude models
+            let tools_json = match serde_json::to_value(self.get_anthropic_tools()) {
+                Ok(tools) => tools,
+                Err(_) => json!(null),
+            };
+            let sys_msg = match system_message {
+                Some(m) => m,
+                None => "",
+            };
+
             json!({
-                "prompt": self.prepare_anthropic_prompt(&messages),
-                "max_tokens_to_sample": self.max_tokens.unwrap_or(2000),
+                "anthropic_version": "bedrock-2023-05-31",
+                "system": sys_msg,
+                "messages": messages,
+                "max_tokens": self.max_tokens.unwrap_or(2000),
                 "temperature": self.temperature,
-                "top_p": 1,
-                "top_k": 250,
-            })
-        } else if self.model_id.contains("meta") {
-            // Meta Llama models
-            json!({
-                "prompt": self.prepare_llama_prompt(&messages, system_message),
-                "max_gen_len": self.max_tokens.unwrap_or(2000),
-                "temperature": self.temperature,
-                "top_p": 0.9,
+                "tools": tools_json
             })
         } else {
             return Err(InferenceError::InvalidResponse(format!("Unsupported model: {}", self.model_id)));
@@ -143,38 +175,7 @@ impl Inference for AWSBedrockInference {
             .await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
 
-        let response_body: Value = serde_json::from_slice(&response.body.into_inner())
-            .map_err(|e| InferenceError::InvalidResponse(e.to_string()))?;
-        println!("{:#?}", response_body);
-        
-        let content = if self.model_id.contains("anthropic") {
-            response_body["completion"].as_str()
-                .ok_or_else(|| InferenceError::InvalidResponse("Missing completion in response".to_string()))?
-        } else if self.model_id.contains("meta") {
-            response_body["generation"].as_str()
-                .ok_or_else(|| InferenceError::InvalidResponse("Missing generation in response".to_string()))?
-        } else {
-            return Err(InferenceError::InvalidResponse(format!("Unsupported model: {}", self.model_id)));
-        };
-
-        Ok(ModelResponse {
-            content: vec![ContentItem::Text { text: content.to_string() }],
-            id: "bedrock".to_string(),
-            model: self.model_id.clone(),
-            role: "assistant".to_string(),
-            message_type: "text".to_string(),
-            stop_reason: "stop".to_string(),
-            stop_sequence: None,
-            usage: Usage {
-                input_tokens: 0,  // Bedrock doesn't provide token counts
-                output_tokens: 0,
-                cache_creation_input_tokens: 0,
-                cache_read_input_tokens: 0,
-            },
-        })
-    }
-
-    async fn generate_stream(&self, _messages: &[Message]) -> Result<ResponseStream> {
-        Err(anyhow::anyhow!("Streaming not yet implemented for AWS Bedrock"))
+        ModelResponse::from_bytes(&response.body.into_inner())
+            .map_err(|e| InferenceError::InvalidResponse(e.to_string()))
     }
 }

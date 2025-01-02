@@ -5,7 +5,7 @@ use anyhow::Result;
 
 use crate::config::ProjectConfig;
 use super::types::{
-    ContentItem, InferenceError, Message, ModelResponse, Role, Usage
+    ContentItem, InferenceError, Message, ModelResponse, Role
 };
 use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
 
@@ -22,7 +22,6 @@ struct OpenAIResponse {
     id: String,
     model: String,
     choices: Vec<OpenAIChoice>,
-    usage: OpenAIUsage,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,12 +71,6 @@ struct OpenAIToolCall {
 struct OpenAIFunctionCall {
     name: String,
     arguments: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAIUsage {
-    prompt_tokens: i32,
-    completion_tokens: i32,
 }
 
 pub struct OpenAIInference {
@@ -334,12 +327,12 @@ impl OpenAIInference {
             message_type: "text".to_string(),
             stop_reason: openai_response.choices[0].finish_reason.clone(),
             stop_sequence: None,
-            usage: Usage {
-                input_tokens: openai_response.usage.prompt_tokens,
-                cache_creation_input_tokens: 0,
-                cache_read_input_tokens: 0,
-                output_tokens: openai_response.usage.completion_tokens,
-            },
+            //usage: Some(Usage {
+            //    input_tokens: openai_response.usage.prompt_tokens,
+            //    cache_creation_input_tokens: 0,
+            //    cache_read_input_tokens: 0,
+            //    output_tokens: openai_response.usage.completion_tokens,
+            //}),
         })
     }
 }
