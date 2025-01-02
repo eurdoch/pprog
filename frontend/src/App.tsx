@@ -28,13 +28,66 @@ interface Message {
   content: (Text | ToolUse | ToolResult)[],
 }
 
+interface FileChange {
+  filename: string;
+  changes: {
+    type: 'added' | 'removed';
+    content: string;
+    lineNumber?: number;
+  }[];
+}
+
+function parseDiff(diffContent: string): FileChange[] {
+  const files: FileChange[] = [];
+  let currentFile: FileChange | null = null;
+  
+  const lines = diffContent.split('\n');
+  let lineNumber = 0;
+
+  for (const line of lines) {
+    // New file
+    if (line.startsWith('diff --git')) {
+      if (currentFile) {
+        files.push(currentFile);
+      }
+      const filename = line.split(' b/')[1];
+      currentFile = {
+        filename,
+        changes: []
+      };
+    }
+    // Added line
+    else if (line.startsWith('+') && !line.startsWith('+++')) {
+      currentFile?.changes.push({
+        type: 'added',
+        content: line.substring(1),
+        lineNumber: ++lineNumber
+      });
+    }
+    // Removed line
+    else if (line.startsWith('-') && !line.startsWith('---')) {
+      currentFile?.changes.push({
+        type: 'removed',
+        content: line.substring(1),
+        lineNumber: ++lineNumber
+      });
+    }
+  }
+
+  if (currentFile) {
+    files.push(currentFile);
+  }
+
+  return files;
+}
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showFab, setShowFab] = useState(false);
+  const [showFab, setShowFab] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [diffContent, setDiffContent] = useState<any>(null);
+  const [diffFiles, setDiffFiles] = useState<FileChange[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -45,7 +98,29 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  // New effect to fetch messages on component mount
+  // Fetch and parse diff data when showFab becomes true
+  useEffect(() => {
+    if (showFab) {
+      const fetchAndParseDiff = async () => {
+        try {
+          const response = await fetch(`${window.SERVER_URL}/diff`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch diff');
+          }
+          const data = await response.json();
+          if (data.diff) {
+            const parsedFiles = parseDiff(data.diff);
+            setDiffFiles(parsedFiles);
+          }
+        } catch (error) {
+          console.error('Error fetching diff:', error);
+        }
+      };
+
+      fetchAndParseDiff();
+    }
+  }, [showFab]);
+
   useEffect(() => {
     const fetchMessages = async () => {
       try {
@@ -61,21 +136,10 @@ function App() {
     };
 
     fetchMessages();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
-  const handleDiffCheck = async () => {
-    try {
-      const response = await fetch(`${window.SERVER_URL}/diff`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch diff');
-      }
-      const data = await response.json();
-      console.log('Diff result:', data);
-      setDiffContent(data);
-      setShowModal(true);
-    } catch (error) {
-      console.error('Error fetching diff:', error);
-    }
+  const handleDiffCheck = () => {
+    setShowModal(true);
   };
 
   const handleModalClose = () => {
@@ -118,7 +182,6 @@ function App() {
       });
 
       if (!response.ok) {
-        // TODO fix backend error iwthin error
         const data = await response.json();
         console.error(data);
         setIsProcessing(false);
@@ -138,14 +201,12 @@ function App() {
         switch(contentItem.type) {
           case "text":
             break;
-          // Received tool, immediately send back to handle too use on backend
           case "tool_use":
             await handleSendMessage({
               role: "assistant",
               content: [contentItem],
             });
             break;
-          // Received tool result, immediately send back to send to model
           case "tool_result":
             await handleSendMessage({
               role: "user",
@@ -190,7 +251,7 @@ function App() {
 
   return (
     <div className="chat-container">
-      <div className="chat-messages" style={{  }}>
+      <div className="chat-messages">
         {messages.map((message, index) => {
             switch (message.content[0].type) {
               case "text":
@@ -226,10 +287,29 @@ function App() {
         <div className="modal-overlay" onClick={handleModalClose}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={handleModalClose}>×</button>
-            <h2>Diff Results</h2>
-            <pre className="diff-content">
-              {JSON.stringify(diffContent, null, 2)}
-            </pre>
+            <h2>Changed Files</h2>
+            <div className="diff-content">
+              {diffFiles && diffFiles.length > 0 ? (
+                diffFiles.map((file, fileIndex) => (
+                  <div key={fileIndex} className="file-changes">
+                    <h3 className="file-name">{file.filename}</h3>
+                    <div className="changes-list">
+                      {file.changes.map((change, changeIndex) => (
+                        <div 
+                          key={changeIndex} 
+                          className={`change-line ${change.type}`}
+                        >
+                          <span className="line-number">{change.lineNumber}</span>
+                          <span className="line-content">{change.content}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div>No changes found</div>
+              )}
+            </div>
           </div>
         </div>
       )}

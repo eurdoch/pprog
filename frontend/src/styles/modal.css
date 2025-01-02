@@ -14,7 +14,7 @@
 .modal-content {
   background: white;
   width: 50%;
-  max-width: 600px;
+  max-width: 800px;
   height: 100%;
   padding: 24px;
   position: relative;
@@ -59,19 +59,69 @@
 }
 
 .diff-content {
-  background: #f8fafc;
-  padding: 16px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-wrap: break-word;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   font-size: 14px;
   line-height: 1.5;
   color: #1f2937;
-  margin-top: 16px;
+}
+
+.file-changes {
+  margin-bottom: 24px;
+  background: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
   box-shadow: 
-    inset 0 2px 4px rgba(0, 0, 0, 0.06),
+    0 2px 4px rgba(0, 0, 0, 0.05),
     0 0 0 1px rgba(0, 0, 0, 0.02);
+}
+
+.file-name {
+  margin: 0;
+  padding: 12px 16px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 1rem;
+  color: #334155;
+}
+
+.changes-list {
+  padding: 8px 0;
+}
+
+.change-line {
+  display: flex;
+  padding: 2px 16px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  white-space: pre;
+}
+
+.change-line.added {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.change-line.removed {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.line-number {
+  width: 40px;
+  margin-right: 16px;
+  color: #64748b;
+  user-select: none;
+}
+
+.line-content {
+  flex: 1;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
