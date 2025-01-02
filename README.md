@@ -1,7 +1,7 @@
 # p(air) prog(rammer)
 pprog is an LLM based pair programmer for working on coding projects.  it can generate, edit and answer questions about your code.
 
-This is experimental and unstable code, it may change at any time.
+This is experimental and unstable code, it may change at any time.  It has solid support for Claude models through the Anthropic API, as well as OpenAI and Deepseek through their OpenAI compatible endpoint.  Still working on support for o1 as the lack of system prompt makes it more difficult to implement.  The program should work with any OpenAI compatible API using a base url but is not guaranteed.
 
 ## prereqs
 - Rust (cargo)
@@ -25,6 +25,7 @@ pprog init
 ```
 This will generate a config file `pprog.toml` with sensible defaults depending on the type of project.  For this example the `pprog.toml` will contain
 ```
+provider = "anthropic"
 model = "claude-3-5-haiku-latest"
 check_cmd = "node index.js"
 base_url = "https://api.anthropic.com/v1"
@@ -34,6 +35,7 @@ max_output_tokens = 8096
 ```
 The program that generates and edits code in the backend uses the `check_cmd` to check compilation or successful operation.  In this case `node index.js` will be run to check for any errors in code changes and then loop to fix these changes if they exist.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  An Anthropic account is assumed on init, but OpenAI-compatible APIs can be used as well.  For example, to use OpenAI you can change config to 
 ```
+provider = "openai"
 model = "gpt-4o"
 check_cmd = "node index.js"
 base_url = "https://api.openai.com/v1"
