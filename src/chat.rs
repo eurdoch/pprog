@@ -185,7 +185,7 @@ impl Chat {
                                 let check_cmd = Self::extract_string_field(input, "cmd")?;
                                 let output = Command::new("bash")
                                     .arg("-c")
-                                    .arg(format!("{} & sleep 1; kill $!", check_cmd))
+                                    .arg(format!("{} & sleep 5; kill $!", check_cmd))
                                     .current_dir(root_path)
                                     .output()
                                     .expect("Failed to execute command");
