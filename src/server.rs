@@ -3,7 +3,7 @@ use actix_cors::Cors;
 use handlebars::Handlebars;
 use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::sync::Mutex;
 use std::collections::HashMap;
 use actix_web::http;
@@ -11,7 +11,7 @@ use std::process::Command;
 use std::str;
 
 use crate::chat::Chat;
-use crate::inference::types::{Message, Role, ContentItem, InferenceError};
+use crate::inference::types::{Message, Role};
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
@@ -23,11 +23,9 @@ pub struct ChatResponse {
     message: Message,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct ErrorResponse {
-    error: Value,  // Changed to Value to support both string and object errors
-    error_type: String,
-    status_code: u16,
+    error: String,
 }
 
 #[derive(Serialize)]
@@ -50,56 +48,6 @@ fn get_mime_type(filename: &str) -> &'static str {
         f if f.ends_with(".js") => "application/javascript; charset=utf-8",
         f if f.ends_with(".svg") => "image/svg+xml",
         _ => "application/octet-stream"
-    }
-}
-
-fn parse_error_message(message: &str) -> Value {
-    // Try to parse the error message as JSON first
-    if let Ok(json_value) = serde_json::from_str::<Value>(message) {
-        json_value
-    } else {
-        // If it's not valid JSON, return it as a simple string
-        Value::String(message.to_string())
-    }
-}
-
-fn handle_inference_error(error: InferenceError) -> HttpResponse {
-    match error {
-        InferenceError::NetworkError(msg) => {
-            HttpResponse::ServiceUnavailable().json(ErrorResponse {
-                error: parse_error_message(&msg),
-                error_type: "network_error".to_string(),
-                status_code: 503,
-            })
-        }
-        InferenceError::ApiError(status, msg) => {
-            HttpResponse::build(status).json(ErrorResponse {
-                error: parse_error_message(&msg),
-                error_type: "api_error".to_string(),
-                status_code: status.as_u16(),
-            })
-        }
-        InferenceError::InvalidResponse(msg) => {
-            HttpResponse::BadGateway().json(ErrorResponse {
-                error: parse_error_message(&msg),
-                error_type: "invalid_response".to_string(),
-                status_code: 502,
-            })
-        }
-        InferenceError::MissingApiKey(msg) => {
-            HttpResponse::InternalServerError().json(ErrorResponse {
-                error: parse_error_message(&msg),
-                error_type: "configuration_error".to_string(),
-                status_code: 500,
-            })
-        }
-        InferenceError::SerializationError(msg) => {
-            HttpResponse::InternalServerError().json(ErrorResponse {
-                error: parse_error_message(&msg),
-                error_type: "serialization_error".to_string(),
-                status_code: 500,
-            })
-        }
     }
 }
 
@@ -128,9 +76,7 @@ async fn get_diff() -> impl Responder {
         .output() {
             Ok(output) => output,
             Err(e) => return HttpResponse::InternalServerError().json(ErrorResponse {
-                error: parse_error_message(&e.to_string()),
-                error_type: "git_error".to_string(),
-                status_code: 500,
+                error: e.to_string(),
             })
         };
 
@@ -138,9 +84,7 @@ async fn get_diff() -> impl Responder {
     let diff_str = match str::from_utf8(&output.stdout) {
         Ok(s) => s.to_string(),
         Err(e) => return HttpResponse::InternalServerError().json(ErrorResponse {
-            error: parse_error_message(&e.to_string()),
-            error_type: "encoding_error".to_string(),
-            status_code: 500,
+            error: e.to_string(),
         })
     };
 
@@ -167,81 +111,23 @@ async fn chat_handler(
 ) -> impl Responder {
     let mut chat = data.chat.lock().unwrap();
 
-    match &req.0.message.content[0] {
-        ContentItem::Text { .. } => {
-            let new_msg = Message {
-                role: Role::User,
-                content: vec![req.0.message.content[0].clone()]
-            };
-
-            match chat.send_message(new_msg).await {
-                Ok(returned_msg) => {
-                    HttpResponse::Ok().json(ChatResponse {
-                        message: returned_msg,
-                    })
-                },
-                Err(e) => {
-                    match e.downcast::<InferenceError>() {
-                        Ok(inference_error) => handle_inference_error(inference_error),
-                        Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {
-                            error: parse_error_message(&other_error.to_string()),
-                            error_type: "unknown_error".to_string(),
-                            status_code: 500,
-                        })
-                    }
-                }
-            }
-        },
-        ContentItem::ToolUse { id, .. } => {
-            match chat.handle_tool_use(&req.0.message.content[0]).await {
-                Ok(tool_use_result) => HttpResponse::Ok().json(ChatResponse {
-                    message: Message {
-                        role: Role::User,
-                        content: vec![
-                            ContentItem::ToolResult {
-                                tool_use_id: id.to_string(),
-                                content: tool_use_result
-                            }
-                        ]
-                    }
-                }),
-                Err(e) => {
-                    HttpResponse::InternalServerError().json(ErrorResponse {
-                        error: parse_error_message(&e.to_string()),
-                        error_type: "tool_error".to_string(),
-                        status_code: 500,
-                    })
-                }
-            }
-        },
-        ContentItem::ToolResult { .. } => {
-            let msg = Message {
-                role: Role::User,
-                content: req.0.message.content.clone(),
-            };
-            
-            match chat.send_message(msg).await {
-                Ok(returned_msg) => {
-                    HttpResponse::Ok().json(ChatResponse {
-                        message: returned_msg,
-                    })
-                },
-                Err(e) => {
-                    match e.downcast::<InferenceError>() {
-                        Ok(inference_error) => handle_inference_error(inference_error),
-                        Err(other_error) => HttpResponse::InternalServerError().json(ErrorResponse {
-                            error: parse_error_message(&other_error.to_string()),
-                            error_type: "unknown_error".to_string(),
-                            status_code: 500,
-                        })
-                    }
-                }
-            }
-        }
+    match chat.handle_message(&req.0.message).await {
+        Ok(m) => HttpResponse::Ok().json(ChatResponse {
+            message: m
+        }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: e.to_string(),
+        }),
     }
 }
 
-fn process_files(dir: &Dir, base_path: &str, static_files: &mut HashMap<String, Vec<u8>>, hbs: &mut Handlebars, template_data: &serde_json::Value) {
+fn process_files(
+    dir: &Dir,
+    base_path: &str,
+    static_files: &mut HashMap<String, Vec<u8>>,
+    hbs: &mut Handlebars,
+    template_data: &serde_json::Value,
+) {
     for entry in dir.entries() {
         let relative_path = entry.path().to_string_lossy().replace("\\", "/");
         let full_path = format!("{}/{}", base_path, relative_path);

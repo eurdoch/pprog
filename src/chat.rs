@@ -115,6 +115,36 @@ impl Chat {
             .ok_or_else(|| anyhow::anyhow!("'{}' field is not a string: {:?}", field_name, input.get(field_name)))
     }
 
+    pub async fn handle_message(&mut self, message: &Message) -> Result<Message, anyhow::Error> {
+        match &message.content[0] {
+            ContentItem::Text { .. } => {
+                let new_msg = Message {
+                    role: Role::User,
+                    content: vec![message.content[0].clone()]
+                };
+
+                self.send_message(new_msg).await
+            },
+            ContentItem::ToolUse { id, .. } => {
+                match self.handle_tool_use(&message.content[0]).await {
+                    Ok(tool_use_result) => Ok(Message {
+                        role: Role::User,
+                        content: vec![
+                            ContentItem::ToolResult {
+                                tool_use_id: id.to_string(),
+                                content: tool_use_result
+                            }
+                        ]
+                    }),
+                    Err(e) => Err(e)
+                }
+            },
+            ContentItem::ToolResult { .. } => {
+                self.send_message(message.clone()).await
+            }
+        }
+    }
+
     pub async fn send_message(&mut self, message: Message) -> Result<Message, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;
