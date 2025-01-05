@@ -235,6 +235,7 @@ const App: React.FC = () => {
       await handleSendMessage(userMessage);
     } catch (error) {
       console.error(error);
+      setMessages(prev => prev.slice(0, -1));
       setIsProcessing(false);
     } finally {
       setIsProcessing(false);
@@ -292,6 +293,7 @@ const App: React.FC = () => {
       }
     } catch (error: any) {
       console.error(error);
+      setMessages(prev => prev.slice(0, -1));
       setIsProcessing(false);
     } finally {
       // Decrement recursive call count
