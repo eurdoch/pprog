@@ -1,4 +1,4 @@
-use crate::inference::types::{Message, InferenceError as Error};
+use crate::inference::types::Message;
 use async_trait::async_trait;
 
 #[async_trait]
@@ -8,7 +8,7 @@ pub trait Chat: Send + Sync {
     async fn new() -> Self where Self: Sized;
     
     /// Handle an incoming message and return a response
-    async fn handle_message(&mut self, message: &Message) -> Result<Message, Error>;
+    async fn handle_message(&mut self, message: &Message) -> Result<Message, anyhow::Error>;
 
     /// Send message using inference
     async fn send_message(&mut self, message: Message) -> Result<Message, anyhow::Error>; 

@@ -1,7 +1,7 @@
 use tokenizers::Tokenizer;
 
 use crate::inference::{
-    types::{ContentItem, Message, Role, InferenceError as Error, Inference},
+    types::{ContentItem, Message, Role, Inference},
     AWSBedrockInference,
 };
 use crate::config::ProjectConfig;
@@ -82,8 +82,8 @@ impl Chat for BedrockChat {
         }
     }
 
-    async fn handle_message(&mut self, message: &Message) -> Result<Message, Error> {
-        self.send_message(message.clone()).await.map_err(|e| Error::InvalidResponse(e.to_string()))
+    async fn handle_message(&mut self, message: &Message) -> Result<Message, anyhow::Error> {
+        Ok(self.send_message(message.clone()).await?)
     }
 
     fn get_messages(&self) -> &Vec<Message> {

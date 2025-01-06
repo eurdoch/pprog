@@ -2,13 +2,14 @@ use tokenizers::Tokenizer;
 use async_trait::async_trait;
 
 use crate::inference::{
-    types::{ContentItem, Message, Role, InferenceError as Error},
+    types::{ContentItem, Message, Role},
     AnthropicInference,
 };
 use crate::config::ProjectConfig;
 use crate::tree::GitTree;
 
 use super::chat::Chat;
+use crate::chat::tools::Tools;
 
 static TOKENIZER_JSON: &[u8] = include_bytes!("../../tokenizers/gpt2.json");
 
@@ -76,9 +77,33 @@ impl Chat for AnthropicChat {
         }
     }
 
-    async fn handle_message(&mut self, message: &Message) -> Result<Message, Error> {
-        self.send_message(message.clone()).await.map_err(|e| Error::InvalidResponse(e.to_string()))
+    async fn handle_message(&mut self, message: &Message) -> Result<Message, anyhow::Error> {
+        println!("{:#?}", message.clone());
+        match message.role {
+            Role::User => {
+                Ok(self.send_message(message.clone()).await?)
+            },
+            Role::Assistant => {
+                match &message.content[0] {
+                    ContentItem::Text { .. } => Err(anyhow::Error::msg("Incorrect order of messages.")),
+                    ContentItem::ToolUse { id, name, input } => {
+                        let tool_result = Tools::handle_tool_use(name.clone(), input.clone())?;
+                        Ok(Message {
+                            role: Role::User,
+                            content: vec![ContentItem::ToolResult {
+                                tool_use_id: id.to_string(),
+                                content: tool_result
+                            }],
+                        })
+                    },
+                    ContentItem::ToolResult { .. } =>
+                        Err(anyhow::Error::msg("Tool result messages should not be assigned assistant role.")),
+                }
+            },
+            _ => Err(anyhow::Error::msg("Incorrect role for Anthropic chats."))
+        }
     }
+
 
     fn get_messages(&self) -> &Vec<Message> {
         &self.messages

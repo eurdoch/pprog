@@ -1,7 +1,7 @@
 use tokenizers::Tokenizer;
 
 use crate::inference::{
-    types::{ContentItem, Message, Role, InferenceError as Error},
+    types::{ContentItem, Message, Role},
     DeepSeekInference,
 };
 use crate::config::ProjectConfig;
@@ -33,8 +33,8 @@ impl Chat for DeepSeekChat {
         }
     }
 
-    async fn handle_message(&mut self, message: &Message) -> Result<Message, Error> {
-        self.send_message(message.clone()).await.map_err(|e| Error::InvalidResponse(e.to_string()))
+    async fn handle_message(&mut self, message: &Message) -> Result<Message, anyhow::Error> {
+        Ok(self.send_message(message.clone()).await?)
     }
     
     async fn send_message(&mut self, message: Message) -> Result<Message, anyhow::Error> {
