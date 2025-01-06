@@ -1,0 +1,30 @@
+# Example configs for nodejs project
+
+provider = "openai"
+model = "gpt-4o"
+check_cmd = "node index.js"
+base_url = "https://api.openai.com/v1"
+api_key = "<OPENAI API KEY>"
+max_context = 150000
+max_output_tokens = 8096
+
+model = "claude-3-5-haiku-latest"  
+check_cmd = "node index.js"
+base_url = "https://api.anthropic.com/v1"
+api_key = "<ANTHROPIC API KEY>"
+max_context = 128000
+max_output_tokens = 8096
+
+# Using bedrock requires that AWS credentials and config are setup in ~/.aws/credentials and ~/.aws/config respectively
+provider = "bedrock"
+model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+check_cmd = "node index.js"
+max_context = 100000
+max_output_tokens = 8096
+
+model = "deepseek-chat"
+check_cmd = "node index.js"
+base_url = "https://api.deepseek.com/v1"
+api_key = "<DEEPSEEK API KEY>"
+max_context = 100000
+max_output_tokens = 8096
