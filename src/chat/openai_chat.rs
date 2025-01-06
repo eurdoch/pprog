@@ -1,8 +1,8 @@
 use tokenizers::Tokenizer;
-use anyhow::Result;
+use async_trait::async_trait;
 
 use crate::inference::{
-    types::{ContentItem, Message, Role},
+    types::{ContentItem, Message, Role, InferenceError as Error},
     OpenAIInference,
 };
 use crate::config::ProjectConfig;
@@ -19,6 +19,7 @@ pub struct OpenAIChat {
     max_tokens: usize,
 }
 
+#[async_trait]
 impl Chat for OpenAIChat {
     async fn new() -> Self {
         let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).expect("Failed to load tokenizer.");
@@ -32,11 +33,11 @@ impl Chat for OpenAIChat {
         }
     }
 
-    async fn handle_message<'a>(&mut self, message: &'a Message) -> Result<Message, anyhow::Error> {
-        self.send_message(message.clone()).await
+    async fn handle_message<'a>(&mut self, message: &'a Message) -> Result<Message, Error> {
+        self.send_message(message.clone()).await.map_err(|e| Error::InvalidResponse(e.to_string()))
     }
     
-    async fn send_message(&mut self, message: Message) -> Result<Message> {
+    async fn send_message(&mut self, message: Message) -> Result<Message, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;
             let system_message = format!(

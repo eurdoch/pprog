@@ -1,14 +1,14 @@
 use tokenizers::Tokenizer;
-use anyhow::Result;
 
 use crate::inference::{
-    types::{ContentItem, Message, Role, Inference},
+    types::{ContentItem, Message, Role, InferenceError as Error, Inference},
     AWSBedrockInference,
 };
 use crate::config::ProjectConfig;
 use crate::tree::GitTree;
 
 use super::chat::Chat;
+use async_trait::async_trait;
 
 static TOKENIZER_JSON: &[u8] = include_bytes!("../../tokenizers/gpt2.json");
 
@@ -19,8 +19,9 @@ pub struct BedrockChat {
     max_tokens: usize,
 }
 
+#[async_trait]
 impl Chat for BedrockChat {
-    async fn new() -> Self {
+    async fn new() -> Self where Self: Sized {
         let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).expect("Failed to load tokenizer.");
         let config = ProjectConfig::load().unwrap_or_default();
 
@@ -38,7 +39,7 @@ impl Chat for BedrockChat {
         }
     }
     
-    async fn send_message(&mut self, message: Message) -> Result<Message> {
+    async fn send_message(&mut self, message: Message) -> Result<Message, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;
             let system_message = format!(
@@ -81,8 +82,8 @@ impl Chat for BedrockChat {
         }
     }
 
-    async fn handle_message<'a>(&mut self, message: &'a Message) -> Result<Message, anyhow::Error> {
-        self.send_message(message.clone()).await.map_err(|e| e.to_string())
+    async fn handle_message<'a>(&mut self, message: &'a Message) -> Result<Message, Error> {
+        self.send_message(message.clone()).await.map_err(|e| Error::InvalidResponse(e.to_string()))
     }
 
     fn get_messages(&self) -> &Vec<Message> {

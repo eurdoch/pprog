@@ -1,9 +1,8 @@
 use tokenizers::Tokenizer;
-use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::inference::{
-    types::{ContentItem, Message, Role, InferenceError},
+    types::{ContentItem, Message, Role, InferenceError as Error},
     AnthropicInference,
 };
 use crate::config::ProjectConfig;
@@ -77,8 +76,8 @@ impl Chat for AnthropicChat {
         }
     }
 
-    async fn handle_message<'a>(&mut self, message: &'a Message) -> Result<Message, anyhow::Error> {
-        self.send_message(message.clone()).await.map_err(|e| InferenceError::InvalidResponse(e.to_string()))
+    async fn handle_message<'a>(&mut self, message: &'a Message) -> Result<Message, Error> {
+        self.send_message(message.clone()).await.map_err(|e| Error::InvalidResponse(e.to_string()))
     }
 
     fn get_messages(&self) -> &Vec<Message> {
@@ -91,7 +90,6 @@ impl Chat for AnthropicChat {
 }
 
 impl AnthropicChat {
-    // Copy the helper methods from the original Chat struct
     fn content_to_string(content: &[ContentItem]) -> String {
         content.iter()
             .map(|item| match item {
