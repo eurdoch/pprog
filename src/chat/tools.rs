@@ -37,8 +37,7 @@ impl Tools {
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         } else {
-            let error = String::from_utf8_lossy(&output.stderr).to_string();
-            Err(anyhow::Error::msg(error))
+            Ok(String::from_utf8_lossy(&output.stderr).to_string())
         }
     }
 
