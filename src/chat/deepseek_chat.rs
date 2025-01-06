@@ -33,7 +33,7 @@ impl Chat for DeepSeekChat {
         }
     }
 
-    async fn handle_message<'a>(&mut self, message: &'a Message) -> Result<Message, Error> {
+    async fn handle_message(&mut self, message: &Message) -> Result<Message, Error> {
         self.send_message(message.clone()).await.map_err(|e| Error::InvalidResponse(e.to_string()))
     }
     
