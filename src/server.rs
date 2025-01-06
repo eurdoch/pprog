@@ -10,8 +10,12 @@ use actix_web::http;
 use std::process::Command;
 use std::str;
 
-use crate::chat::Chat;
-use crate::inference::types::{Message, Role};
+use crate::chat::anthropic_chat::AnthropicChat;
+use crate::chat::chat::Chat;
+use crate::chat::deepseek_chat::DeepSeekChat;
+use crate::chat::openai_chat::OpenAIChat;
+use crate::config::ProjectConfig;
+use crate::inference::types::Message;
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
@@ -34,7 +38,7 @@ pub struct DiffResponse {
 }
 
 pub struct AppState {
-    chat: Mutex<Chat>,
+    chat: Mutex<Box<dyn Chat>>,
     static_files: HashMap<String, Vec<u8>>,
 }
 
@@ -54,17 +58,13 @@ fn get_mime_type(filename: &str) -> &'static str {
 #[get("/messages")]
 async fn get_messages(data: web::Data<AppState>) -> impl Responder {
     let chat = data.chat.lock().unwrap();
-    HttpResponse::Ok().json(&chat.messages)
+    HttpResponse::Ok().json(&chat.get_messages())
 }
 
 #[get("/clear")]
 async fn clear_chat(data: web::Data<AppState>) -> impl Responder {
     let mut chat = data.chat.lock().unwrap();
-    let system_prompt = chat.messages.first().filter(|msg| msg.role == Role::System).cloned();
-    chat.messages.clear();
-    if let Some(prompt) = system_prompt {
-        chat.messages.push(prompt);
-    }
+    chat.clear();
     HttpResponse::Ok().json(json!({"cleared": true, "message": "Chat history cleared"}))
 }
 
@@ -165,8 +165,23 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     
     process_files(&DIST_DIR, "", &mut static_files, &mut hbs, &template_data);
 
+    let config = match ProjectConfig::load() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Error loading config: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let provider_specific_chat: Box<dyn Chat> = match config.provider.as_str() {
+        "anthropic" => Box::new(AnthropicChat::new().await),
+        "deepseek" => Box::new(DeepSeekChat::new().await),
+        "openai" => Box::new(OpenAIChat::new().await),
+        _ => Box::new(AnthropicChat::new().await),
+    };
+
     let app_state = web::Data::new(AppState {
-        chat: Mutex::new(Chat::new().await),
+        chat: Mutex::new(provider_specific_chat),
         static_files,
     });
 
