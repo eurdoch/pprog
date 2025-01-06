@@ -35,6 +35,7 @@ pub enum Role {
     Assistant,
     System,
     Developer, // because OpenAI just had to change the system name
+    Tool, // Deepseek API uses tool role for tool results
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

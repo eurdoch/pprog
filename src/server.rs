@@ -115,6 +115,7 @@ async fn chat_handler(
         Ok(m) => HttpResponse::Ok().json(ChatResponse {
             message: m
         }),
+        // TODO implement logic to parse error into JSON and handle specific errors
         Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: e.to_string(),
         }),
