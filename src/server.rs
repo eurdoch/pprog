@@ -10,21 +10,18 @@ use actix_web::http;
 use std::process::Command;
 use std::str;
 
-use crate::chat::anthropic_chat::AnthropicChat;
-use crate::chat::chat::Chat;
+use crate::chat::chat::{Chat, CommonMessage};
 use crate::chat::deepseek_chat::DeepSeekChat;
-use crate::chat::openai_chat::OpenAIChat;
 use crate::config::ProjectConfig;
-use crate::inference::types::Message;
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
-    message: Message,
+    message: CommonMessage,
 }
 
 #[derive(Serialize, Clone)]
 pub struct ChatResponse {
-    message: Message,
+    message: CommonMessage,
 }
 
 #[derive(Serialize, Clone)]
@@ -101,7 +98,7 @@ async fn get_diff() -> impl Responder {
     * by client and immediately sent back to third party API.  That response is then forwarded to
     * client and this continues until there are no more tool_use messages.
     *
-    * The messages coming from client are of type Message to make parsing easier but are guaranteed 
+    * The messages coming from client are of type CommonMessage to make parsing easier but are guaranteed 
     * to only have a single content item when sent by client.
     *
 */
@@ -175,10 +172,11 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     };
 
     let provider_specific_chat: Box<dyn Chat> = match config.provider.as_str() {
-        "anthropic" => Box::new(AnthropicChat::new().await),
+        //"anthropic" => Box::new(AnthropicChat::new().await),
         "deepseek" => Box::new(DeepSeekChat::new().await),
-        "openai" => Box::new(OpenAIChat::new().await),
-        _ => Box::new(AnthropicChat::new().await),
+        _ => Box::new(DeepSeekChat::new().await),
+        //"openai" => Box::new(OpenAIChat::new().await),
+        //_ => Box::new(AnthropicChat::new().await),
     };
 
     let app_state = web::Data::new(AppState {

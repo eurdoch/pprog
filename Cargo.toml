@@ -11,7 +11,6 @@ include = [
     "src/**/*",
     "build.rs",
     "frontend/dist/**/*",  # Include only the built files
-    "tokenizers/*",
     "Cargo.toml",
 ]
 
@@ -51,7 +50,6 @@ actix-cors = "0.7"
 futures = "0.3"
 home = "0.5.11"
 handlebars = "6.2.0"
-tokenizers = "0.21.0"
 
 [dev-dependencies]
 tempfile = "3.8"

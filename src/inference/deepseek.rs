@@ -2,75 +2,74 @@ use std::collections::HashMap;
 use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
+use serde_json::Value;
 
+use crate::chat::chat::Role;
 use crate::config::ProjectConfig;
 use super::types::{
-    ContentItem, InferenceError, Message, ModelResponse, Role
+    InferenceError
 };
 use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeepSeekModelResponse {
+    pub choices: Vec<Choice>,
+    pub created: i64,
+    pub id: String,
+    pub model: String,
+    pub object: String,
+    pub system_fingerprint: String,
+    pub usage: Usage,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Choice {
+    pub finish_reason: String,
+    pub index: i32,
+    pub logprobs: Option<serde_json::Value>,
+    pub message: DeepSeekMessage,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeepSeekMessage {
+    pub content: String,
+    pub role: Role,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ToolCall {
+    pub function: Function,
+    pub id: String,
+    pub index: i32,
+    #[serde(rename = "type")]
+    pub call_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Function {
+    pub arguments: Value,
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Usage {
+    pub completion_tokens: i32,
+    pub prompt_cache_hit_tokens: i32,
+    pub prompt_cache_miss_tokens: i32,
+    pub prompt_tokens: i32,
+    pub total_tokens: i32,
+}
 
 #[derive(Serialize)]
 struct DeepSeekRequest {
     model: String,
-    messages: Vec<serde_json::Value>,
+    messages: Vec<DeepSeekMessage>,
     max_tokens: Option<u32>,
     tools: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct DeepSeekResponse {
-    id: String,
-    model: String,
-    choices: Vec<DeepSeekChoice>,
-}
-
-#[derive(Debug, Deserialize)]
-struct DeepSeekChoice {
-    finish_reason: String,
-    message: DeepSeekMessage,
-}
-
-fn deserialize_content<'de, D>(deserializer: D) -> Result<Vec<ContentItem>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum ContentWrapper {
-        String(String),
-        Null,
-        Array(Vec<ContentItem>),
-    }
-
-    let wrapper = ContentWrapper::deserialize(deserializer)?;
-    match wrapper {
-        ContentWrapper::String(s) => Ok(vec![ContentItem::Text { text: s }]),
-        ContentWrapper::Null => Ok(vec![]),
-        ContentWrapper::Array(v) => Ok(v),
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct DeepSeekMessage {
-    role: String,
-    #[serde(deserialize_with = "deserialize_content")]
-    content: Vec<ContentItem>,
-    #[serde(default)]
-    tool_calls: Option<Vec<DeepSeekToolCall>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct DeepSeekToolCall {
-    id: String,
-    #[serde(rename = "type")]
-    call_type: String,
-    function: DeepSeekFunctionCall,
-}
-
-#[derive(Debug, Deserialize)]
-struct DeepSeekFunctionCall {
-    name: String,
-    arguments: String,
 }
 
 pub struct DeepSeekInference {
@@ -81,8 +80,8 @@ pub struct DeepSeekInference {
     max_output_tokens: u32,
 }
 
-impl std::default::Default for DeepSeekInference {
-    fn default() -> Self {
+impl DeepSeekInference {
+    pub fn new() -> Self {
         let config = match ProjectConfig::load() {
             Ok(config) => config,
             Err(_) => ProjectConfig::default(),
@@ -95,12 +94,6 @@ impl std::default::Default for DeepSeekInference {
             api_key: config.api_key,
             max_output_tokens: config.max_output_tokens,
         }
-    }
-}
-
-impl DeepSeekInference {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     fn get_tools(&self) -> Vec<OpenAITool> {
@@ -231,47 +224,31 @@ impl DeepSeekInference {
         serde_json::to_value(self.get_tools())
     }
 
-    pub async fn query_model(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+    pub async fn query_model(
+        &self,
+        mut messages: Vec<DeepSeekMessage>,
+        system_message: Option<&str>
+    ) -> Result<DeepSeekModelResponse, InferenceError> {
+
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("DeepSeek API key not found".to_string()));
         }
 
         if let Some(sys_msg) = system_message {
-            messages.insert(0, Message {
+            messages.insert(0, DeepSeekMessage {
                 role: Role::System,
-                content: vec![ContentItem::Text { text: sys_msg.to_string() }],
+                content: sys_msg.to_string(),
+                tool_calls: None,
+                tool_call_id: None,
             });
         }
-
-        let deepseek_messages = messages.into_iter().map(|msg| {
-            let content = msg.content.iter()
-                .filter_map(|item| {
-                    match item {
-                        ContentItem::Text { text } => Some(text.clone()),
-                        _ => None
-                    }
-                })
-                .collect::<Vec<String>>()
-                .join(" ");
-
-            serde_json::json!({
-                "role": match msg.role {
-                    Role::User => "user",
-                    Role::Assistant => "assistant",
-                    Role::System => "system",
-                    Role::Developer => "developer",
-                    Role::Tool => "tool",
-                },
-                "content": content
-            })
-        }).collect();
 
         let tools = self.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string())).ok();
 
         let request = DeepSeekRequest {
             model: self.model.clone(),
-            messages: deepseek_messages,
+            messages,
             max_tokens: Some(self.max_output_tokens),
             tools,
         };
@@ -288,53 +265,20 @@ impl DeepSeekInference {
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
-        log::info!("{:?}", response_text);
+        let response_json: Value = serde_json::from_str(&response_text).map_err(|e| println!("{:?}", e)).unwrap();
+        println!("{:#?}", response_json);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
         }
 
-        let deepseek_response: DeepSeekResponse = serde_json::from_str(&response_text)
+        let deepseek_response: DeepSeekModelResponse = serde_json::from_str(&response_text)
             .map_err(|e| InferenceError::InvalidResponse(format!("Failed to parse DeepSeek response: {}", e)))?;
 
         if deepseek_response.choices.is_empty() {
-            return Err(InferenceError::InvalidResponse("No choices in DeepSeek response".to_string()));
+            Err(InferenceError::InvalidResponse("No choices in DeepSeek response".to_string()))
+        } else {
+            Ok(deepseek_response)
         }
-
-        let first_choice = &deepseek_response.choices[0].message;
-        let mut content = first_choice.content.clone();
-
-        // Handle tool calls if present
-        if let Some(tool_calls) = &first_choice.tool_calls {
-            for tool_call in tool_calls {
-                if tool_call.call_type == "function" {
-                    // Parse the arguments as JSON Value
-                    let input: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
-                        .map_err(|e| InferenceError::SerializationError(format!("Failed to parse tool arguments: {}", e)))?;
-
-                    content.push(ContentItem::ToolUse {
-                        id: tool_call.id.clone(),
-                        name: tool_call.function.name.clone(),
-                        input,
-                    });
-                }
-            }
-        }
-
-        Ok(ModelResponse {
-            content,
-            id: deepseek_response.id,
-            model: deepseek_response.model,
-            role: first_choice.role.clone(),
-            message_type: "text".to_string(),
-            stop_reason: deepseek_response.choices[0].finish_reason.clone(),
-            stop_sequence: None,
-            //usage: Some(Usage {
-            //    input_tokens: deepseek_response.usage.prompt_tokens,
-            //    output_tokens: deepseek_response.usage.completion_tokens,
-            //    cache_creation_input_tokens: deepseek_response.usage.prompt_cache_miss_tokens,
-            //    cache_read_input_tokens: deepseek_response.usage.prompt_cache_hit_tokens,
-            //}),
-        })
     }
 }

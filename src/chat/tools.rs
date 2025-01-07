@@ -1,4 +1,3 @@
-
 use std::fs;
 use std::process::Command;
 use anyhow::Result;
@@ -41,7 +40,8 @@ impl Tools {
         }
     }
 
-    pub fn handle_tool_use(name: String, inputs: serde_json::Value) -> Result<String> {
+    pub fn handle_tool_use(name: String, inputs: serde_json::Value) -> Result<String, anyhow::Error> {
+        println!("Handle tool use fn: {:#?}", inputs);
         match name.as_str() {
             "read_file" => {
                 let path = inputs.get("path")

@@ -3,9 +3,10 @@ use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
 
+use crate::chat::chat::{CommonMessage, ContentItem, Role};
 use crate::config::ProjectConfig;
 use super::types::{
-    ContentItem, InferenceError, Message, ModelResponse, Role
+    InferenceError, ModelResponse
 };
 use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
 
@@ -231,13 +232,13 @@ impl OpenAIInference {
         serde_json::to_value(self.get_tools())
     }
 
-    pub async fn query_model(&self, mut messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+    pub async fn query_model(&self, mut messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("OpenAI API key not found".to_string()));
         }
 
         if let Some(sys_msg) = system_message {
-            messages.insert(0, Message {
+            messages.insert(0, CommonMessage {
                 role: Role::System,
                 content: vec![ContentItem::Text { text: sys_msg.to_string() }],
             });

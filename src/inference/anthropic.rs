@@ -3,16 +3,17 @@ use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
 
+use crate::chat::chat::{CommonMessage, ContentItem};
 use crate::config::ProjectConfig;
 use super::types::{
-    ContentItem, InferenceError, Message, ModelResponse
+    InferenceError, ModelResponse
 };
 use super::tools::{AnthropicTool, InputSchema, PropertySchema};
 
 #[derive(Serialize)]
 struct AnthropicRequest<'a> {
     model: &'a str,
-    messages: Vec<Message>,
+    messages: Vec<CommonMessage>,
     max_tokens: u32,
     tools: serde_json::Value,
     system: String,
@@ -166,7 +167,7 @@ impl AnthropicInference {
         serde_json::to_value(self.get_tools())
     }
 
-    pub async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+    pub async fn query_model(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("Anthropic API key not found".to_string()));
         }

@@ -6,7 +6,9 @@ use aws_sdk_bedrockruntime::Client as BedrockClient;
 use aws_sdk_bedrockruntime::primitives::Blob;
 use serde_json::json;
 
-use super::types::{Message, ModelResponse, Inference, InferenceError};
+use crate::chat::chat::CommonMessage;
+
+use super::types::{ModelResponse, InferenceError};
 use super::tools::{AnthropicTool, InputSchema, PropertySchema};
 
 pub struct AWSBedrockInference {
@@ -136,10 +138,8 @@ impl AWSBedrockInference {
             },
         }
     }
-}
 
-impl Inference for AWSBedrockInference {
-    async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+    pub async fn query_model(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         let body = if self.model_id.contains("anthropic") {
             // Anthropic Claude models
             let tools_json = match serde_json::to_value(self.get_anthropic_tools()) {

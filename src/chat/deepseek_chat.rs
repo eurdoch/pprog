@@ -1,44 +1,81 @@
-use tokenizers::Tokenizer;
-
-use crate::inference::{
-    types::{ContentItem, Message, Role},
-    DeepSeekInference,
-};
 use crate::config::ProjectConfig;
+use crate::inference::deepseek::DeepSeekMessage;
+use crate::inference::DeepSeekInference;
 use crate::tree::GitTree;
 
-use super::chat::Chat;
+use super::chat::{convert_to_common_message, convert_to_deepseek_message, Chat, CommonMessage, Role};
+use super::tools::Tools;
 use async_trait::async_trait;
 
-static TOKENIZER_JSON: &[u8] = include_bytes!("../../tokenizers/gpt2.json");
-
 pub struct DeepSeekChat {
-    pub messages: Vec<Message>,
+    pub messages: Vec<DeepSeekMessage>,
     inference: DeepSeekInference,
-    tokenizer: Tokenizer,
     max_tokens: usize,
 }
 
 #[async_trait]
 impl Chat for DeepSeekChat {
     async fn new() -> Self where Self: Sized {
-        let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).expect("Failed to load tokenizer.");
         let config = ProjectConfig::load().unwrap_or_default();
 
         Self {
             messages: Vec::new(),
             inference: DeepSeekInference::new(),
-            tokenizer,
             max_tokens: config.max_context,
         }
     }
 
-    async fn handle_message(&mut self, message: &Message) -> Result<Message, anyhow::Error> {
-        Ok(self.send_message(message.clone()).await?)
+    // TODO add total token count when handling repsonse and check against hat value
+    //self.trim_messages_to_token_limit();
+    async fn handle_message(&mut self, common_message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
+        let deepseek_message = convert_to_deepseek_message(common_message);
+        self.messages.push(deepseek_message.clone());
+        if let Some(tool_calls_vec) = deepseek_message.tool_calls {
+            // Only supports single tool use for now
+            let tool = tool_calls_vec[0].clone();
+            let tool_use_result = match Tools::handle_tool_use(tool.function.name, tool.function.arguments) {
+                Ok(c) => Ok(c),
+                Err(e) => {
+                    self.messages.pop();
+                    Err(e)
+                }
+            }?;
+
+            let tool_result_msg = DeepSeekMessage {
+                role: Role::Tool,
+                tool_call_id: Some(tool.id),
+                content: tool_use_result,
+                tool_calls: None,
+            };
+            self.messages.push(tool_result_msg.clone());
+            let tool_result_common_msg = convert_to_common_message(&tool_result_msg);
+            Ok(tool_result_common_msg)
+        } else {
+            match self.send_messages().await {
+                Ok(return_msg) => {
+                    Ok(convert_to_common_message(&return_msg))  
+                },
+                Err(e) => Err(e),
+            }
+        }
     }
-    
-    async fn send_message(&mut self, message: Message) -> Result<Message, anyhow::Error> {
-        if message.role == Role::User {
+
+    fn get_messages(&self) -> Vec<CommonMessage> {
+        let messages: Vec<CommonMessage> = self.messages.iter()
+            .map(|msg| convert_to_common_message(msg))
+            .collect();
+        messages
+    }
+
+
+    fn clear(&mut self) {
+        self.messages.clear();
+    }
+}
+
+impl DeepSeekChat {    
+    async fn send_messages(&mut self) -> Result<DeepSeekMessage, anyhow::Error> {
+        if let Some(Role::User) = self.messages.last().map(|m| m.role.clone()) {
             let tree_string = GitTree::get_tree()?;
             let system_message = format!(
                 r#"
@@ -58,18 +95,10 @@ impl Chat for DeepSeekChat {
                 "#,
                 &tree_string,
             );
-            self.trim_messages_to_token_limit();
-            self.messages.push(message);
             
             match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
-                Ok(response) => {
-                    let new_msg = Message {
-                        role: Role::Assistant,
-                        content: response.content.clone()
-                    };
-                    self.messages.push(new_msg.clone());
-                    Ok(new_msg)
-                },
+                // TODO add token counts from response to running total
+                Ok(response) => Ok(response.choices[0].message.clone()),
                 Err(e) => {
                     self.messages.pop();
                     Err(e.into())
@@ -77,43 +106,6 @@ impl Chat for DeepSeekChat {
             }
         } else {
             Err(anyhow::anyhow!("Can only send messages with user role when querying model."))
-        }
-    }
-
-    fn get_messages(&self) -> &Vec<Message> {
-        &self.messages
-    }
-
-    fn clear(&mut self) {
-        self.messages.clear();
-    }
-}
-
-impl DeepSeekChat {
-    fn content_to_string(content: &[ContentItem]) -> String {
-        content.iter()
-            .map(|item| match item {
-                ContentItem::Text { text } => text.clone(),
-                ContentItem::ToolUse { name, input, .. } => format!("tool {} with input: {:?}", name, input),
-                ContentItem::ToolResult { content, .. } => format!("tool result: {}", content),
-            })
-            .collect::<Vec<String>>()
-            .join(" ")
-    }
-
-    fn calculate_total_tokens(&self) -> usize {
-        self.messages.iter()
-            .map(|msg| {
-                let text = format!("{:?} {}", msg.role, Self::content_to_string(&msg.content));
-                let encoding = self.tokenizer.encode(text, false).unwrap();
-                encoding.len()
-            })
-            .sum()
-    }
-
-    fn trim_messages_to_token_limit(&mut self) {
-        while self.calculate_total_tokens() > self.max_tokens && !self.messages.is_empty() {
-            self.messages.remove(0);
         }
     }
 }

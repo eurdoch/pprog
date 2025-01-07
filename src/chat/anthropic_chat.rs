@@ -1,40 +1,69 @@
-use tokenizers::Tokenizer;
 use async_trait::async_trait;
 
-use crate::inference::{
-    types::{ContentItem, Message, Role},
-    AnthropicInference,
-};
+use crate::inference::AnthropicInference;
 use crate::config::ProjectConfig;
 use crate::tree::GitTree;
 
-use super::chat::Chat;
+use super::chat::{Chat, CommonMessage, Role, ContentItem};
 use crate::chat::tools::Tools;
 
-static TOKENIZER_JSON: &[u8] = include_bytes!("../../tokenizers/gpt2.json");
-
 pub struct AnthropicChat {
-    pub messages: Vec<Message>,
+    pub messages: Vec<CommonMessage>,
     inference: AnthropicInference,
-    tokenizer: Tokenizer,
     max_tokens: usize,
 }
 
 #[async_trait]
 impl Chat for AnthropicChat {
     async fn new() -> Self {
-        let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).expect("Failed to load tokenizer.");
         let config = ProjectConfig::load().unwrap_or_default();
 
         Self {
             messages: Vec::new(),
             inference: AnthropicInference::new(),
-            tokenizer,
             max_tokens: config.max_context,
         }
     }
 
-    async fn send_message(&mut self, message: Message) -> Result<Message, anyhow::Error> {
+    async fn handle_message(&mut self, message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
+        println!("{:#?}", message.clone());
+        match message.role {
+            Role::User => {
+                Ok(self.send_message(message.clone()).await?)
+            },
+            Role::Assistant => {
+                match &message.content[0] {
+                    ContentItem::Text { .. } => Err(anyhow::Error::msg("Incorrect order of messages.")),
+                    ContentItem::ToolUse { id, name, input } => {
+                        let tool_result = Tools::handle_tool_use(name.clone(), input.clone())?;
+                        Ok(CommonMessage {
+                            role: Role::User,
+                            content: vec![ContentItem::ToolResult {
+                                tool_use_id: id.to_string(),
+                                content: tool_result
+                            }],
+                        })
+                    },
+                    ContentItem::ToolResult { .. } =>
+                        Err(anyhow::Error::msg("Tool result messages should not be assigned assistant role.")),
+                }
+            },
+            _ => Err(anyhow::Error::msg("Incorrect role for Anthropic chats."))
+        }
+    }
+
+
+    fn get_messages(&self) -> Vec<CommonMessage> {
+        self.messages.clone()
+    }
+
+    fn clear(&mut self) {
+        self.messages.clear();
+    }
+}
+
+impl AnthropicChat {
+    async fn send_message(&mut self, message: CommonMessage) -> Result<CommonMessage, anyhow::Error> {
         if message.role == Role::User {
             let tree_string = GitTree::get_tree()?;
             let system_message = format!(
@@ -55,12 +84,12 @@ impl Chat for AnthropicChat {
                 "#,
                 &tree_string,
             );
-            self.trim_messages_to_token_limit();
+            //self.trim_messages_to_token_limit();
             self.messages.push(message);
             
             match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
                 Ok(response) => {
-                    let new_msg = Message {
+                    let new_msg = CommonMessage {
                         role: Role::Assistant,
                         content: response.content.clone()
                     };
@@ -74,71 +103,6 @@ impl Chat for AnthropicChat {
             }
         } else {
             Err(anyhow::anyhow!("Can only send messages with user role when querying model."))
-        }
-    }
-
-    async fn handle_message(&mut self, message: &Message) -> Result<Message, anyhow::Error> {
-        println!("{:#?}", message.clone());
-        match message.role {
-            Role::User => {
-                Ok(self.send_message(message.clone()).await?)
-            },
-            Role::Assistant => {
-                match &message.content[0] {
-                    ContentItem::Text { .. } => Err(anyhow::Error::msg("Incorrect order of messages.")),
-                    ContentItem::ToolUse { id, name, input } => {
-                        let tool_result = Tools::handle_tool_use(name.clone(), input.clone())?;
-                        Ok(Message {
-                            role: Role::User,
-                            content: vec![ContentItem::ToolResult {
-                                tool_use_id: id.to_string(),
-                                content: tool_result
-                            }],
-                        })
-                    },
-                    ContentItem::ToolResult { .. } =>
-                        Err(anyhow::Error::msg("Tool result messages should not be assigned assistant role.")),
-                }
-            },
-            _ => Err(anyhow::Error::msg("Incorrect role for Anthropic chats."))
-        }
-    }
-
-
-    fn get_messages(&self) -> &Vec<Message> {
-        &self.messages
-    }
-
-    fn clear(&mut self) {
-        self.messages.clear();
-    }
-}
-
-impl AnthropicChat {
-    fn content_to_string(content: &[ContentItem]) -> String {
-        content.iter()
-            .map(|item| match item {
-                ContentItem::Text { text } => text.clone(),
-                ContentItem::ToolUse { name, input, .. } => format!("tool {} with input: {:?}", name, input),
-                ContentItem::ToolResult { content, .. } => format!("tool result: {}", content),
-            })
-            .collect::<Vec<String>>()
-            .join(" ")
-    }
-
-    fn calculate_total_tokens(&self) -> usize {
-        self.messages.iter()
-            .map(|msg| {
-                let text = format!("{:?} {}", msg.role, Self::content_to_string(&msg.content));
-                let encoding = self.tokenizer.encode(text, false).unwrap();
-                encoding.len()
-            })
-            .sum()
-    }
-
-    fn trim_messages_to_token_limit(&mut self) {
-        while self.calculate_total_tokens() > self.max_tokens && !self.messages.is_empty() {
-            self.messages.remove(0);
         }
     }
 }

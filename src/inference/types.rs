@@ -2,41 +2,7 @@ use serde::{Serialize, Deserialize};
 use serde::de::Error as SerdeError;
 use anyhow::Result;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-#[serde(tag = "type")]
-pub enum ContentItem {
-    #[serde(rename = "text")]
-    Text {
-        text: String,
-    },
-    #[serde(rename = "tool_use")]
-    ToolUse {
-        id: String,
-        name: String,
-        input: serde_json::Value,
-    },
-    #[serde(rename = "tool_result")]
-    ToolResult {
-        tool_use_id: String,
-        content: String,
-    },
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct Message {
-    pub role: Role,
-    pub content: Vec<ContentItem>,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum Role {
-    User,
-    Assistant,
-    System,
-    Developer, // because OpenAI just had to change the system name
-    Tool, // Deepseek API uses tool role for tool results
-}
+use crate::chat::chat::ContentItem;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ModelResponse {
@@ -125,7 +91,3 @@ impl std::fmt::Display for InferenceError {
 }
 
 impl std::error::Error for InferenceError {}
-
-pub trait Inference {
-    async fn query_model(&self, messages: Vec<Message>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError>;
-}
