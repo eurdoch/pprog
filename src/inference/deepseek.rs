@@ -229,7 +229,6 @@ impl DeepSeekInference {
         mut messages: Vec<DeepSeekMessage>,
         system_message: Option<&str>
     ) -> Result<DeepSeekModelResponse, InferenceError> {
-
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("DeepSeek API key not found".to_string()));
         }
@@ -265,8 +264,7 @@ impl DeepSeekInference {
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
-        let response_json: Value = serde_json::from_str(&response_text).map_err(|e| println!("{:?}", e)).unwrap();
-        println!("{:#?}", response_json);
+        //let response_json: Value = serde_json::from_str(&response_text).map_err(|e| println!("{:?}", e)).unwrap();
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));

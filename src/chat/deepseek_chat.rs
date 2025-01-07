@@ -28,7 +28,8 @@ impl Chat for DeepSeekChat {
     // TODO add total token count when handling repsonse and check against hat value
     //self.trim_messages_to_token_limit();
     async fn handle_message(&mut self, common_message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
-        let deepseek_message = convert_to_deepseek_message(common_message);
+        let deepseek_message = convert_to_deepseek_message(common_message)?;
+
         self.messages.push(deepseek_message.clone());
         if let Some(tool_calls_vec) = deepseek_message.tool_calls {
             // Only supports single tool use for now
@@ -47,10 +48,11 @@ impl Chat for DeepSeekChat {
                 content: tool_use_result,
                 tool_calls: None,
             };
-            self.messages.push(tool_result_msg.clone());
+            //self.messages.push(tool_result_msg.clone());
             let tool_result_common_msg = convert_to_common_message(&tool_result_msg);
             Ok(tool_result_common_msg)
         } else {
+            println!("{:#?}", self.messages.clone());
             match self.send_messages().await {
                 Ok(return_msg) => {
                     Ok(convert_to_common_message(&return_msg))  
