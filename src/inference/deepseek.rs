@@ -6,9 +6,7 @@ use serde_json::Value;
 
 use crate::chat::chat::Role;
 use crate::config::ProjectConfig;
-use super::types::{
-    InferenceError
-};
+use super::types::InferenceError;
 use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -229,6 +227,8 @@ impl DeepSeekInference {
         mut messages: Vec<DeepSeekMessage>,
         system_message: Option<&str>
     ) -> Result<DeepSeekModelResponse, InferenceError> {
+        let messages_string = serde_json::to_string(&messages);
+        println!("Query model messages: {:#?}", messages_string);
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("DeepSeek API key not found".to_string()));
         }
@@ -264,6 +264,7 @@ impl DeepSeekInference {
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
+        println!("{:#?}", response_text);
         //let response_json: Value = serde_json::from_str(&response_text).map_err(|e| println!("{:?}", e)).unwrap();
 
         if !status.is_success() {

@@ -52,11 +52,11 @@ impl Chat for DeepSeekChat {
             let tool_result_common_msg = convert_to_common_message(&tool_result_msg);
             Ok(tool_result_common_msg)
         } else {
-            println!("{:#?}", self.messages.clone());
             match self.send_messages().await {
                 Ok(return_msg) => {
-                    Ok(convert_to_common_message(&return_msg))  
-                },
+                    let return_common_msg = convert_to_common_message(&return_msg);
+                    Ok(return_common_msg)
+                }
                 Err(e) => Err(e),
             }
         }
@@ -77,37 +77,39 @@ impl Chat for DeepSeekChat {
 
 impl DeepSeekChat {    
     async fn send_messages(&mut self) -> Result<DeepSeekMessage, anyhow::Error> {
-        if let Some(Role::User) = self.messages.last().map(|m| m.role.clone()) {
-            let tree_string = GitTree::get_tree()?;
-            let system_message = format!(
-                r#"
-                You are a coding assistant working on a project.
+        match self.messages.last().map(|m| m.role.clone()) {
+            Some(Role::User) | Some(Role::Tool) => {
+                let tree_string = GitTree::get_tree()?;
+                let system_message = format!(
+                    r#"
+                    You are a coding assistant working on a project.
+                    
+                    File tree structure:
+                    {}
+
+                    The user will give you instructions on how to change the project code.
+
+                    Always call 'compile_check' tool after completing changes that the user requests.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
+
+                    Never make any changes outside of the project's root directory.
+                    Always read and write entire file contents.  Never write partial contents of a file.
+
+                    The user may also general questions and in that case simply answer but do not execute any tools.
+                    "#,
+                    &tree_string,
+                );
                 
-                File tree structure:
-                {}
-
-                The user will give you instructions on how to change the project code.
-
-                Always call 'compile_check' tool after completing changes that the user requests.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
-
-                Never make any changes outside of the project's root directory.
-                Always read and write entire file contents.  Never write partial contents of a file.
-
-                The user may also general questions and in that case simply answer but do not execute any tools.
-                "#,
-                &tree_string,
-            );
-            
-            match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
-                // TODO add token counts from response to running total
-                Ok(response) => Ok(response.choices[0].message.clone()),
-                Err(e) => {
-                    self.messages.pop();
-                    Err(e.into())
+                match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
+                    // TODO add token counts from response to running total
+                    Ok(response) => Ok(response.choices[0].message.clone()),
+                    Err(e) => {
+                        self.messages.pop();
+                        Err(e.into())
+                    }
                 }
             }
-        } else {
-            Err(anyhow::anyhow!("Can only send messages with user role when querying model."))
+            _ => Err(anyhow::anyhow!("Can only send messages with user or tool role when querying model."))
         }
+
     }
 }

@@ -74,14 +74,14 @@ pub fn convert_to_common_message(msg: &DeepSeekMessage) -> CommonMessage {
 }
 
 pub fn convert_to_deepseek_message(msg: &CommonMessage) -> Result<DeepSeekMessage, anyhow::Error> {
-    // Get the text content or tool result content
-    let (content, tool_call_id) = msg.content.iter()
+    // Get the text content or tool result content and determine role
+    let (content, tool_call_id, role) = msg.content.iter()
         .find_map(|item| match item {
-            ContentItem::Text { text } => Some((text.clone(), None)),
-            ContentItem::ToolResult { tool_use_id, content } => Some((content.clone(), Some(tool_use_id.clone()))),
+            ContentItem::Text { text } => Some((text.clone(), None, msg.role.clone())),
+            ContentItem::ToolResult { tool_use_id, content } => Some((content.clone(), Some(tool_use_id.clone()), Role::Tool)),
             _ => None,
         })
-        .unwrap_or_default();
+        .unwrap_or_else(|| (String::new(), None, msg.role.clone()));
 
     // Collect tool calls if they exist
     let tool_calls = {
@@ -116,7 +116,7 @@ pub fn convert_to_deepseek_message(msg: &CommonMessage) -> Result<DeepSeekMessag
     };
     
     Ok(DeepSeekMessage {
-        role: msg.role.clone(),
+        role,
         content,
         tool_calls,
         tool_call_id,
