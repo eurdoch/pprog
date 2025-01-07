@@ -25,39 +25,42 @@ impl Chat for DeepSeekChat {
         }
     }
 
-    // TODO add total token count when handling repsonse and check against hat value
+    // TODO add total token count when handling response and check against that value
     //self.trim_messages_to_token_limit();
     async fn handle_message(&mut self, common_message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
         let deepseek_message = convert_to_deepseek_message(common_message)?;
 
         self.messages.push(deepseek_message.clone());
-        if let Some(tool_calls_vec) = deepseek_message.tool_calls {
-            // Only supports single tool use for now
-            let tool = tool_calls_vec[0].clone();
-            let tool_use_result = match Tools::handle_tool_use(tool.function.name, tool.function.arguments) {
-                Ok(c) => Ok(c),
-                Err(e) => {
-                    self.messages.pop();
-                    Err(e)
-                }
-            }?;
+        
+        match &deepseek_message {
+            DeepSeekMessage::Regular { tool_calls: Some(tool_calls_vec), .. } => {
+                // Only supports single tool use for now
+                let tool = tool_calls_vec[0].clone();
+                let tool_use_result = match Tools::handle_tool_use(tool.function.name, tool.function.arguments) {
+                    Ok(c) => Ok(c),
+                    Err(e) => {
+                        self.messages.pop();
+                        Err(e)
+                    }
+                }?;
 
-            let tool_result_msg = DeepSeekMessage {
-                role: Role::Tool,
-                tool_call_id: Some(tool.id),
-                content: tool_use_result,
-                tool_calls: None,
-            };
-            //self.messages.push(tool_result_msg.clone());
-            let tool_result_common_msg = convert_to_common_message(&tool_result_msg);
-            Ok(tool_result_common_msg)
-        } else {
-            match self.send_messages().await {
-                Ok(return_msg) => {
-                    let return_common_msg = convert_to_common_message(&return_msg);
-                    Ok(return_common_msg)
+                let tool_result_msg = DeepSeekMessage::Tool {
+                    role: Role::Tool,
+                    tool_call_id: tool.id,
+                    content: tool_use_result,
+                };
+                //self.messages.push(tool_result_msg.clone());
+                let tool_result_common_msg = convert_to_common_message(&tool_result_msg);
+                Ok(tool_result_common_msg)
+            },
+            _ => {
+                match self.send_messages().await {
+                    Ok(return_msg) => {
+                        let return_common_msg = convert_to_common_message(&return_msg);
+                        Ok(return_common_msg)
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
             }
         }
     }
@@ -69,7 +72,6 @@ impl Chat for DeepSeekChat {
         messages
     }
 
-
     fn clear(&mut self) {
         self.messages.clear();
     }
@@ -77,7 +79,13 @@ impl Chat for DeepSeekChat {
 
 impl DeepSeekChat {    
     async fn send_messages(&mut self) -> Result<DeepSeekMessage, anyhow::Error> {
-        match self.messages.last().map(|m| m.role.clone()) {
+        // Check the role of the last message
+        let last_role = self.messages.last().map(|m| match m {
+            DeepSeekMessage::Regular { role, .. } => role.clone(),
+            DeepSeekMessage::Tool { role, .. } => role.clone(),
+        });
+
+        match last_role {
             Some(Role::User) | Some(Role::Tool) => {
                 let tree_string = GitTree::get_tree()?;
                 let system_message = format!(
@@ -110,6 +118,5 @@ impl DeepSeekChat {
             }
             _ => Err(anyhow::anyhow!("Can only send messages with user or tool role when querying model."))
         }
-
     }
 }

@@ -29,13 +29,19 @@ pub struct Choice {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct DeepSeekMessage {
-    pub content: String,
-    pub role: Role,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<ToolCall>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_call_id: Option<String>,
+#[serde(untagged)]
+pub enum DeepSeekMessage {
+    Regular {
+        role: Role,
+        content: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tool_calls: Option<Vec<ToolCall>>,
+    },
+    Tool {
+        role: Role,
+        content: String,
+        tool_call_id: String,
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -232,26 +238,21 @@ impl DeepSeekInference {
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("DeepSeek API key not found".to_string()));
         }
-
         if let Some(sys_msg) = system_message {
-            messages.insert(0, DeepSeekMessage {
+            messages.insert(0, DeepSeekMessage::Regular {
                 role: Role::System,
                 content: sys_msg.to_string(),
                 tool_calls: None,
-                tool_call_id: None,
             });
         }
-
         let tools = self.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string())).ok();
-
         let request = DeepSeekRequest {
             model: self.model.clone(),
             messages,
             max_tokens: Some(self.max_output_tokens),
             tools,
         };
-
         let response = self.client
             .post(format!("{}/chat/completions", self.base_url))
             .header("Content-Type", "application/json")
@@ -260,20 +261,16 @@ impl DeepSeekInference {
             .send()
             .await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
-
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
         println!("{:#?}", response_text);
         //let response_json: Value = serde_json::from_str(&response_text).map_err(|e| println!("{:?}", e)).unwrap();
-
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
         }
-
         let deepseek_response: DeepSeekModelResponse = serde_json::from_str(&response_text)
             .map_err(|e| InferenceError::InvalidResponse(format!("Failed to parse DeepSeek response: {}", e)))?;
-
         if deepseek_response.choices.is_empty() {
             Err(InferenceError::InvalidResponse("No choices in DeepSeek response".to_string()))
         } else {

@@ -41,49 +41,64 @@ pub enum Role {
 
 pub fn convert_to_common_message(msg: &DeepSeekMessage) -> CommonMessage {
     let mut content = Vec::new();
-
-    // Handle tool calls if present
-    if let Some(tool_calls) = &msg.tool_calls {
-        for tool_call in tool_calls {
-            content.push(ContentItem::ToolUse {
-                id: tool_call.id.clone(),
-                name: tool_call.function.name.clone(),
-                input: serde_json::from_value(tool_call.function.arguments.clone())
-                    .unwrap_or(serde_json::Value::Null),
+    
+    match msg {
+        DeepSeekMessage::Regular { role, content: msg_content, tool_calls } => {
+            // Handle tool calls if present
+            if let Some(tool_calls) = tool_calls {
+                for tool_call in tool_calls {
+                    content.push(ContentItem::ToolUse {
+                        id: tool_call.id.clone(),
+                        name: tool_call.function.name.clone(),
+                        input: serde_json::from_value(tool_call.function.arguments.clone())
+                            .unwrap_or(serde_json::Value::Null),
+                    });
+                }
+            }
+            // Add text content if not empty
+            if !msg_content.is_empty() {
+                content.push(ContentItem::Text {
+                    text: msg_content.clone(),
+                });
+            }
+            CommonMessage {
+                role: role.clone(),
+                content,
+            }
+        },
+        DeepSeekMessage::Tool { role, content: msg_content, tool_call_id } => {
+            content.push(ContentItem::ToolResult {
+                tool_use_id: tool_call_id.clone(),
+                content: msg_content.clone(),
             });
+            CommonMessage {
+                role: role.clone(),
+                content,
+            }
         }
-    }
-
-    // If it's a tool response (has tool_call_id), create a ToolResult
-    if let Some(tool_call_id) = &msg.tool_call_id {
-        content.push(ContentItem::ToolResult {
-            tool_use_id: tool_call_id.clone(),
-            content: msg.content.clone(),
-        });
-    } else if !msg.content.is_empty() {
-        // Otherwise, if there's content, create a Text item
-        content.push(ContentItem::Text {
-            text: msg.content.clone(),
-        });
-    }
-
-    CommonMessage {
-        role: msg.role.clone(),
-        content,
     }
 }
 
 pub fn convert_to_deepseek_message(msg: &CommonMessage) -> Result<DeepSeekMessage, anyhow::Error> {
     // Get the text content or tool result content and determine role
-    let (content, tool_call_id, role) = msg.content.iter()
+    let (content, tool_call_id) = msg.content.iter()
         .find_map(|item| match item {
-            ContentItem::Text { text } => Some((text.clone(), None, msg.role.clone())),
-            ContentItem::ToolResult { tool_use_id, content } => Some((content.clone(), Some(tool_use_id.clone()), Role::Tool)),
+            ContentItem::Text { text } => Some((text.clone(), None)),
+            ContentItem::ToolResult { tool_use_id, content } => Some((content.clone(), Some(tool_use_id.clone()))),
             _ => None,
         })
-        .unwrap_or_else(|| (String::new(), None, msg.role.clone()));
+        .unwrap_or_else(|| (String::new(), None));
 
-    // Collect tool calls if they exist
+    // If we have a tool_call_id, return a Tool message
+    if let Some(id) = tool_call_id {
+        return Ok(DeepSeekMessage::Tool {
+            role: Role::Tool,
+            content,
+            tool_call_id: id,
+        });
+    }
+
+    // Otherwise collect tool calls if they exist
     let tool_calls = {
         let calls: Result<Vec<_>, anyhow::Error> = msg.content.iter()
             .filter_map(|item| {
@@ -115,11 +130,10 @@ pub fn convert_to_deepseek_message(msg: &CommonMessage) -> Result<DeepSeekMessag
         }
     };
     
-    Ok(DeepSeekMessage {
-        role,
+    Ok(DeepSeekMessage::Regular {
+        role: msg.role.clone(),
         content,
         tool_calls,
-        tool_call_id,
     })
 }
 
