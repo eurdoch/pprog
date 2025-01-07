@@ -85,45 +85,42 @@ pub fn convert_to_deepseek_message(msg: &CommonMessage) -> Result<DeepSeekMessag
 
     // Collect tool calls if they exist
     let tool_calls = {
-        let calls: Vec<_> = msg.content.iter()
+        let calls: Result<Vec<_>, anyhow::Error> = msg.content.iter()
             .filter_map(|item| {
                 if let ContentItem::ToolUse { id, name, input } = item {
-                    let parsed_arguments: serde_json::Value = match input.as_str() {
-                        Some(input_str) => match serde_json::from_str(input_str) {
-                            Ok(val) => val,
-                            Err(e) => return Err(e),
-                        },
-                        None => return Err("Function args not valid.".into()),
-                    };
-
-                    Some(ToolCall {
-                        id: id.clone(),
-                        function: Function {
-                            name: name.clone(),
-                            arguments: serde_json::from_str(input.as_str())?,
-                        },
-                        index: 0,
-                        call_type: "function".to_string(),
-                    })
+                    match input.as_str() {
+                        None => Some(Err(anyhow::anyhow!("Input could not be converted to string"))),
+                        Some(input_string) => match serde_json::from_str(input_string) {
+                            Ok(parsed_arguments) => Some(Ok(ToolCall {
+                                id: id.clone(),
+                                function: Function {
+                                    name: name.clone(),
+                                    arguments: parsed_arguments,
+                                },
+                                index: 0,
+                                call_type: "function".to_string(),
+                            })),
+                            Err(e) => Some(Err(anyhow::anyhow!("Failed to parse JSON: {}", e)))
+                        }
+                    }
                 } else {
                     None
                 }
             })
             .collect();
         
-        if calls.is_empty() {
-            None
-        } else {
-            Some(calls)
+        match calls {
+            Ok(vec) => if vec.is_empty() { None } else { Some(vec) },
+            Err(e) => return Err(e),
         }
     };
-
-    DeepSeekMessage {
+    
+    Ok(DeepSeekMessage {
         role: msg.role.clone(),
         content,
         tool_calls,
         tool_call_id,
-    }
+    })
 }
 
 #[async_trait]

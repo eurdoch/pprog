@@ -10,8 +10,10 @@ use actix_web::http;
 use std::process::Command;
 use std::str;
 
+use crate::chat::anthropic_chat::AnthropicChat;
 use crate::chat::chat::{Chat, CommonMessage};
 use crate::chat::deepseek_chat::DeepSeekChat;
+use crate::chat::openai_chat::OpenAIChat;
 use crate::config::ProjectConfig;
 
 #[derive(Deserialize)]
@@ -172,11 +174,10 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     };
 
     let provider_specific_chat: Box<dyn Chat> = match config.provider.as_str() {
-        //"anthropic" => Box::new(AnthropicChat::new().await),
+        "anthropic" => Box::new(AnthropicChat::new().await),
         "deepseek" => Box::new(DeepSeekChat::new().await),
-        _ => Box::new(DeepSeekChat::new().await),
-        //"openai" => Box::new(OpenAIChat::new().await),
-        //_ => Box::new(AnthropicChat::new().await),
+        "openai" => Box::new(OpenAIChat::new().await),
+        _ => Box::new(AnthropicChat::new().await),
     };
 
     let app_state = web::Data::new(AppState {
