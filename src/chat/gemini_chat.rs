@@ -231,10 +231,6 @@ impl GeminiChat {
                             content,
                         };
                         
-                        // Convert CommonMessage back to GeminiMessage for storage
-                        if let Ok(gemini_msg) = convert_common_to_gemini(&new_msg) {
-                            self.messages.push(gemini_msg);
-                        }
                         Ok(new_msg)
                     },
                     Err(e) => {
