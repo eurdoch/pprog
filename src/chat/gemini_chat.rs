@@ -6,7 +6,7 @@ use crate::inference::GeminiInference;
 use crate::config::ProjectConfig;
 use crate::tree::GitTree;
 
-use super::chat::{convert_common_to_gemini, Chat, CommonMessage, ContentItem, Role};
+use super::chat::{convert_gemini_to_common, convert_common_to_gemini, Chat, CommonMessage, ContentItem, Role};
 use super::tools::Tools;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -14,7 +14,7 @@ use super::tools::Tools;
 pub enum GeminiMessage {
     #[serde(rename = "request")]
     Request {
-        contents: GeminiContent,
+        contents: Vec<GeminiContent>,
         tools: Option<Vec<GeminiTool>>,
         tool_config: Option<GeminiToolConfig>,
     },
@@ -28,35 +28,35 @@ pub enum GeminiMessage {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GeminiContent {
     pub role: String,
-    pub parts: GeminiParts,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(untagged)]
-pub enum GeminiParts {
-    Text {
-        text: String,
-    },
-    FunctionCall {
-        function_call: GeminiFunctionCall,
-    },
-    Parts {
-        parts: Vec<GeminiPart>,
-    }
+    pub parts: Vec<GeminiPart>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GeminiPart {
-    #[serde(rename = "functionCall", skip_serializing_if = "Option::is_none")]
-    pub function_call: Option<GeminiFunctionCall>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+    #[serde(rename = "functionCall", skip_serializing_if = "Option::is_none")]
+    pub function_call: Option<GeminiFunctionCall>,
+    #[serde(rename = "functionResponse", skip_serializing_if = "Option::is_none")]
+    pub function_response: Option<GeminiFunctionResponse>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GeminiFunctionCall {
     pub name: String,
     pub args: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GeminiFunctionResponse {
+    pub name: String,
+    pub response: GeminiFunctionResponseData,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GeminiFunctionResponseData {
+    pub name: String,
+    pub content: serde_json::Value,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -173,7 +173,9 @@ impl Chat for GeminiChat {
     }
 
     fn get_messages(&self) -> Vec<CommonMessage> {
-        self.messages.clone()
+        self.messages.iter()
+            .filter_map(|msg| convert_gemini_to_common(msg).ok())
+            .collect()
     }
 
     fn clear(&mut self) {
@@ -183,10 +185,11 @@ impl Chat for GeminiChat {
     
 impl GeminiChat {
     async fn send_messages(&mut self) -> Result<CommonMessage, anyhow::Error> {
-        // Check the role of the last message
-        let last_role = self.messages.last().map(|m| m.role.clone());
+        // Convert last message role to CommonMessage to check role
+        let last_msg = self.messages.last()
+            .and_then(|msg| convert_gemini_to_common(msg).ok());
 
-        match last_role {
+        match last_msg.map(|msg| msg.role) {
             Some(Role::User) | Some(Role::Tool) => {
                 let tree_string = GitTree::get_tree()?;
                 let system_message = format!(
@@ -210,11 +213,28 @@ impl GeminiChat {
 
                 match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
                     Ok(response) => {
+                        let content = if let GeminiMessage::Response { candidates, .. } = response {
+                            if let Some(first_candidate) = candidates.first() {
+                                first_candidate.content.parts.iter()
+                                    .filter_map(|part| part.text.clone())
+                                    .map(|text| ContentItem::Text { text })
+                                    .collect()
+                            } else {
+                                return Err(anyhow::anyhow!("No candidates in Gemini response"));
+                            }
+                        } else {
+                            return Err(anyhow::anyhow!("Unexpected response type from Gemini"));
+                        };
+
                         let new_msg = CommonMessage {
                             role: Role::Assistant,
-                            content: response.content,
+                            content,
                         };
-                        self.messages.push(new_msg.clone());
+                        
+                        // Convert CommonMessage back to GeminiMessage for storage
+                        if let Ok(gemini_msg) = convert_common_to_gemini(&new_msg) {
+                            self.messages.push(gemini_msg);
+                        }
                         Ok(new_msg)
                     },
                     Err(e) => {

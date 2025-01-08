@@ -44,7 +44,8 @@ pub mod types {
 pub mod convert {
     use super::types::{CommonMessage, ContentItem, Role};
     use crate::chat::gemini_chat::{
-        GeminiContent, GeminiFunctionCall, GeminiMessage, GeminiPart, GeminiParts,
+        GeminiContent, GeminiFunctionCall, GeminiFunctionResponse, GeminiFunctionResponseData,
+        GeminiMessage, GeminiPart,
     };
     use crate::inference::deepseek::{DeepSeekMessage, Function, ToolCall};
 
@@ -53,45 +54,38 @@ pub mod convert {
             GeminiMessage::Request { contents, .. } => {
                 let mut content = Vec::new();
 
-                match &contents.parts {
-                    GeminiParts::Text { text } => {
-                        content.push(ContentItem::Text {
-                            text: text.clone(),
-                        });
-                    }
-                    GeminiParts::FunctionCall { function_call } => {
-                        content.push(ContentItem::ToolUse {
-                            id: "1".to_string(), // Gemini doesn't provide IDs, using default
-                            name: function_call.name.clone(),
-                            input: function_call.args.clone(),
-                        });
-                    }
-                    GeminiParts::Parts { parts } => {
-                        for part in parts {
-                            if let Some(text) = &part.text {
-                                content.push(ContentItem::Text {
-                                    text: text.clone(),
-                                });
-                            }
-                            if let Some(function_call) = &part.function_call {
-                                content.push(ContentItem::ToolUse {
-                                    id: "1".to_string(), // Gemini doesn't provide IDs, using default
-                                    name: function_call.name.clone(),
-                                    input: function_call.args.clone(),
-                                });
-                            }
+                // Process all content items
+                for content_item in contents {
+                    for part in &content_item.parts {
+                        if let Some(text) = &part.text {
+                            content.push(ContentItem::Text {
+                                text: text.clone(),
+                            });
+                        }
+                        if let Some(function_call) = &part.function_call {
+                            content.push(ContentItem::ToolUse {
+                                id: "1".to_string(), // Gemini doesn't provide IDs, using default
+                                name: function_call.name.clone(),
+                                input: function_call.args.clone(),
+                            });
+                        }
+                        if let Some(function_response) = &part.function_response {
+                            content.push(ContentItem::ToolResult {
+                                tool_use_id: "1".to_string(), // Gemini doesn't provide IDs, using default
+                                content: serde_json::to_string(&function_response.response.content)?,
+                            });
                         }
                     }
                 }
 
                 Ok(CommonMessage {
-                    role: match contents.role.as_str() {
+                    role: match contents.last().map(|c| c.role.as_str()).unwrap_or("user") {
                         "user" => Role::User,
                         "assistant" => Role::Assistant,
                         "system" => Role::System,
                         "model" => Role::Assistant,
                         "tool" => Role::Tool,
-                        _ => return Err(anyhow::anyhow!("Unknown role: {}", contents.role)),
+                        r => return Err(anyhow::anyhow!("Unknown role: {}", r)),
                     },
                     content,
                 })
@@ -104,34 +98,24 @@ pub mod convert {
                 let candidate = &candidates[0];
                 let mut content = Vec::new();
 
-                match &candidate.content.parts {
-                    GeminiParts::Text { text } => {
+                for part in &candidate.content.parts {
+                    if let Some(text) = &part.text {
                         content.push(ContentItem::Text {
                             text: text.clone(),
                         });
                     }
-                    GeminiParts::FunctionCall { function_call } => {
+                    if let Some(function_call) = &part.function_call {
                         content.push(ContentItem::ToolUse {
                             id: "1".to_string(), // Gemini doesn't provide IDs, using default
                             name: function_call.name.clone(),
                             input: function_call.args.clone(),
                         });
                     }
-                    GeminiParts::Parts { parts } => {
-                        for part in parts {
-                            if let Some(text) = &part.text {
-                                content.push(ContentItem::Text {
-                                    text: text.clone(),
-                                });
-                            }
-                            if let Some(function_call) = &part.function_call {
-                                content.push(ContentItem::ToolUse {
-                                    id: "1".to_string(), // Gemini doesn't provide IDs, using default
-                                    name: function_call.name.clone(),
-                                    input: function_call.args.clone(),
-                                });
-                            }
-                        }
+                    if let Some(function_response) = &part.function_response {
+                        content.push(ContentItem::ToolResult {
+                            tool_use_id: "1".to_string(), // Gemini doesn't provide IDs, using default
+                            content: serde_json::to_string(&function_response.response.content)?,
+                        });
                     }
                 }
 
@@ -152,6 +136,7 @@ pub mod convert {
                     parts.push(GeminiPart {
                         text: Some(text.clone()),
                         function_call: None,
+                        function_response: None,
                     });
                 }
                 ContentItem::ToolUse { name, input, .. } => {
@@ -161,12 +146,23 @@ pub mod convert {
                             name: name.clone(),
                             args: input.clone(),
                         }),
+                        function_response: None,
                     });
                 }
-                ContentItem::ToolResult { content, .. } => {
+                ContentItem::ToolResult {
+                    content: result_content,
+                    ..
+                } => {
                     parts.push(GeminiPart {
-                        text: Some(content.clone()),
+                        text: None,
                         function_call: None,
+                        function_response: Some(GeminiFunctionResponse {
+                            name: "tool_result".to_string(), // Generic name since we don't track it
+                            response: GeminiFunctionResponseData {
+                                name: "tool_result".to_string(),
+                                content: serde_json::from_str(result_content)?,
+                            },
+                        }),
                     });
                 }
             }
@@ -180,25 +176,11 @@ pub mod convert {
                 Role::Developer => "system".to_string(),
                 Role::Tool => "tool".to_string(),
             },
-            parts: if parts.len() == 1 {
-                if let Some(text) = &parts[0].text {
-                    GeminiParts::Text {
-                        text: text.clone(),
-                    }
-                } else if let Some(function_call) = &parts[0].function_call {
-                    GeminiParts::FunctionCall {
-                        function_call: function_call.clone(),
-                    }
-                } else {
-                    GeminiParts::Parts { parts }
-                }
-            } else {
-                GeminiParts::Parts { parts }
-            },
+            parts,
         };
 
         Ok(GeminiMessage::Request {
-            contents: content,
+            contents: vec![content],
             tools: None,     // Tool declarations should be handled at inference layer
             tool_config: None, // Tool config should be handled at inference layer
         })

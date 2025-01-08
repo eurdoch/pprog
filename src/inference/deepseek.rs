@@ -265,7 +265,6 @@ impl DeepSeekInference {
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
         println!("{:#?}", response_text);
-        //let response_json: Value = serde_json::from_str(&response_text).map_err(|e| println!("{:?}", e)).unwrap();
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
         }
