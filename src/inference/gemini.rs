@@ -311,7 +311,7 @@ impl GeminiInference {
             }),
         };
 
-        let url = format!("{}/models/gemini-pro:generateContent?key={}", self.base_url, self.api_key);
+        let url = format!("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={}", self.api_key);
         
         let response = self.client
             .post(&url)
