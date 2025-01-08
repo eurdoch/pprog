@@ -13,7 +13,6 @@ use std::str;
 use crate::chat::anthropic_chat::AnthropicChat;
 use crate::chat::chat::{Chat, CommonMessage};
 use crate::chat::openai_chat::OpenAIChat;
-use crate::chat::gemini_chat::GeminiChat;
 use crate::config::ProjectConfig;
 
 #[derive(Deserialize)]
@@ -177,7 +176,6 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
         "anthropic" => Box::new(AnthropicChat::new().await),
         //"deepseek" => Box::new(DeepSeekChat::new().await),
         "openai" => Box::new(OpenAIChat::new().await),
-        "gemini" => Box::new(GeminiChat::new().await),
         _ => Box::new(AnthropicChat::new().await),
     };
 
