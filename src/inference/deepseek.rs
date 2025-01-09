@@ -79,7 +79,7 @@ struct DeepSeekRequest {
 pub struct DeepSeekInference {
     model: String,
     client: Client,
-    base_url: String,
+    api_url: String,
     api_key: String,
     max_output_tokens: u32,
 }
@@ -94,7 +94,7 @@ impl DeepSeekInference {
         DeepSeekInference {
             model: config.model,
             client: Client::new(),
-            base_url: config.base_url,
+            api_url: config.api_url,
             api_key: config.api_key,
             max_output_tokens: config.max_output_tokens,
         }
@@ -111,8 +111,6 @@ impl DeepSeekInference {
 
     fn read_file_tool(&self) -> OpenAITool {
         OpenAITool {
-            name: "read_file".to_string(),
-            description: "Read file as string using path relative to root directory of project.".to_string(),
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
                 name: "read_file".to_string(),
@@ -138,8 +136,6 @@ impl DeepSeekInference {
 
     fn write_file_tool(&self) -> OpenAITool {
         OpenAITool {
-            name: "write_file".to_string(),
-            description: "Write string to file at path relative to root directory of project.".to_string(),
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
                 name: "write_file".to_string(),
@@ -172,8 +168,6 @@ impl DeepSeekInference {
 
     fn execute_tool(&self) -> OpenAITool {
         OpenAITool {
-            name: "execute".to_string(),
-            description: "Execute bash statements as a single string..".to_string(),
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
                 name: "execute".to_string(),
@@ -199,8 +193,6 @@ impl DeepSeekInference {
 
     fn compile_check_tool(&self) -> OpenAITool {
         OpenAITool {
-            name: "compile_check".to_string(),
-            description: "Check if project compiles or runs without error.".to_string(),
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
                 name: "compile_check".to_string(),
@@ -254,7 +246,7 @@ impl DeepSeekInference {
             tools,
         };
         let response = self.client
-            .post(format!("{}/chat/completions", self.base_url))
+            .post(format!("{}", self.api_url))
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&request)

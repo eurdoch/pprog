@@ -7,7 +7,6 @@ use crate::chat::chat::ContentItem;
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ModelResponse {
     pub content: Vec<ContentItem>,
-    pub id: String,
     pub model: String,
     pub role: String,
     #[serde(rename = "type")]
@@ -26,11 +25,6 @@ impl ModelResponse {
             .iter()
             .map(ContentItem::deserialize)
             .collect::<Result<Vec<_>, _>>()?;
-
-        let id = value.get("id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| serde_json::Error::missing_field("id"))?
-            .to_string();
 
         let model = value.get("model")
             .and_then(|v| v.as_str())
@@ -59,7 +53,6 @@ impl ModelResponse {
 
         Ok(ModelResponse {
             content,
-            id,
             model,
             role,
             message_type,

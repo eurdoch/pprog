@@ -10,7 +10,7 @@ pub struct ProjectConfig {
     pub model: String,
     pub check_cmd: String,
     #[serde(default)]
-    pub base_url: String,
+    pub api_url: String,
     #[serde(default)]
     pub api_key: String,
     #[serde(default)]
@@ -26,7 +26,7 @@ impl Default for ProjectConfig {
         ProjectConfig {
             model: String::from("claude-3-5-haiku-latest"),
             check_cmd: String::new(),
-            base_url: String::from("https://api.anthropic.com/v1"),
+            api_url: String::from("https://api.anthropic.com/v1/messages"),
             api_key: String::new(),
             max_context: 100000,
             max_output_tokens: 8096,
@@ -131,7 +131,7 @@ impl ProjectConfig {
         let config = ProjectConfig {
             model: String::from("claude-3-5-haiku-latest"),
             check_cmd,
-            base_url: String::from("https://api.anthropic.com/v1"),
+            api_url: String::from("https://api.anthropic.com/v1"),
             api_key,
             max_context: 100000,
             max_output_tokens: 8096,

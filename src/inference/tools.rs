@@ -11,8 +11,6 @@ pub struct AnthropicTool {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OpenAITool {
-    pub name: String,
-    pub description: String,
     #[serde(rename = "type")]
     pub tool_type: String,
     pub function: OpenAIToolFunction,

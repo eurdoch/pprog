@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
+use serde_json::Value;
 
 use crate::chat::chat::{CommonMessage, ContentItem, Role};
 use crate::config::ProjectConfig;
@@ -20,7 +21,6 @@ struct OpenAIRequest {
 
 #[derive(Debug, Deserialize)]
 struct OpenAIResponse {
-    id: String,
     model: String,
     choices: Vec<OpenAIChoice>,
 }
@@ -77,7 +77,7 @@ struct OpenAIFunctionCall {
 pub struct OpenAIInference {
     model: String,
     client: Client,
-    base_url: String,
+    api_url: String,
     api_key: String,
     max_output_tokens: u32,
 }
@@ -92,7 +92,7 @@ impl std::default::Default for OpenAIInference {
         OpenAIInference {
             model: config.model,
             client: Client::new(),
-            base_url: config.base_url,
+            api_url: config.api_url,
             api_key: config.api_key,
             max_output_tokens: config.max_output_tokens,
         }
@@ -115,8 +115,6 @@ impl OpenAIInference {
 
     fn read_file_tool(&self) -> OpenAITool {
         OpenAITool {
-            name: "read_file".to_string(),
-            description: "Read file as string using path relative to root directory of project.".to_string(),
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
                 name: "read_file".to_string(),
@@ -142,8 +140,6 @@ impl OpenAIInference {
 
     fn write_file_tool(&self) -> OpenAITool {
         OpenAITool {
-            name: "write_file".to_string(),
-            description: "Write string to file at path relative to root directory of project.".to_string(),
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
                 name: "write_file".to_string(),
@@ -176,8 +172,6 @@ impl OpenAIInference {
 
     fn execute_tool(&self) -> OpenAITool {
         OpenAITool {
-            name: "execute".to_string(),
-            description: "Execute bash statements as a single string..".to_string(),
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
                 name: "execute".to_string(),
@@ -203,8 +197,6 @@ impl OpenAIInference {
 
     fn compile_check_tool(&self) -> OpenAITool {
         OpenAITool {
-            name: "compile_check".to_string(),
-            description: "Check if project compiles or runs without error.".to_string(),
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
                 name: "compile_check".to_string(),
@@ -233,10 +225,6 @@ impl OpenAIInference {
     }
 
     pub async fn query_model(&self, mut messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
-        if self.api_key.is_empty() {
-            return Err(InferenceError::MissingApiKey("OpenAI API key not found".to_string()));
-        }
-
         if let Some(sys_msg) = system_message {
             messages.insert(0, CommonMessage {
                 role: Role::System,
@@ -244,7 +232,8 @@ impl OpenAIInference {
             });
         }
 
-        let openai_messages = messages.into_iter().map(|msg| {
+        // TODO what is this doing?
+        let openai_messages: Vec<Value> = messages.into_iter().map(|msg| {
             let content = msg.content.iter()
                 .filter_map(|item| {
                     match item {
@@ -278,7 +267,7 @@ impl OpenAIInference {
         };
 
         let response = self.client
-            .post(format!("{}/chat/completions", self.base_url))
+            .post(format!("{}", self.api_url))
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&request)
@@ -289,7 +278,6 @@ impl OpenAIInference {
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
-        log::info!("{:?}", response_text);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
@@ -324,7 +312,6 @@ impl OpenAIInference {
 
         Ok(ModelResponse {
             content,
-            id: openai_response.id,
             model: openai_response.model,
             role: first_choice.role.clone(),
             message_type: "text".to_string(),

@@ -32,7 +32,7 @@ struct AnthropicResponse {
 pub struct AnthropicInference {
     model: String,
     client: Client,
-    base_url: String,
+    api_url: String,
     api_key: String,
     max_output_tokens: u32,
 }
@@ -47,7 +47,7 @@ impl std::default::Default for AnthropicInference {
         AnthropicInference {
             model: config.model,
             client: Client::new(),
-            base_url: config.base_url,
+            api_url: config.api_url,
             api_key: config.api_key,
             max_output_tokens: config.max_output_tokens,
         }
@@ -187,7 +187,7 @@ impl AnthropicInference {
         };
 
         let response = self.client
-            .post(format!("{}/messages", self.base_url))
+            .post(format!("{}", self.api_url))
             .header("Content-Type", "application/json")
             .header("X-API-Key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -211,7 +211,6 @@ impl AnthropicInference {
 
         Ok(ModelResponse {
             content: anthropic_response.content,
-            id: anthropic_response.id,
             model: anthropic_response.model,
             role: anthropic_response.role,
             message_type: "text".to_string(),
