@@ -4,7 +4,7 @@ use crate::inference::OpenAIInference;
 use crate::config::ProjectConfig;
 use crate::tree::GitTree;
 
-use super::chat::{Chat, CommonMessage, Role};
+use super::{chat::{Chat, CommonMessage, ContentItem, Role}, tools::Tools};
 
 pub struct OpenAIChat {
     pub messages: Vec<CommonMessage>,
@@ -25,7 +25,30 @@ impl Chat for OpenAIChat {
     }
 
     async fn handle_message(&mut self, message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
-        Ok(self.send_message(message.clone()).await?)
+        self.messages.push(message.clone());
+        match message.role {
+            Role::User => {
+                Ok(self.send_message(message.clone()).await?)
+            },
+            Role::Assistant => {
+                match &message.content[0] {
+                    ContentItem::Text { .. } => Err(anyhow::Error::msg("Incorrect order of messages.")),
+                    ContentItem::ToolUse { id, name, input } => {
+                        let tool_result = Tools::handle_tool_use(name.clone(), input.clone())?;
+                        Ok(CommonMessage {
+                            role: Role::User,
+                            content: vec![ContentItem::ToolResult {
+                                tool_use_id: id.to_string(),
+                                content: tool_result
+                            }],
+                        })
+                    },
+                    ContentItem::ToolResult { .. } =>
+                        Err(anyhow::Error::msg("Tool result messages should not be assigned assistant role.")),
+                }
+            },
+            _ => Err(anyhow::Error::msg("Incorrect role for Anthropic chats."))
+        }
     }
 
     fn get_messages(&self) -> Vec<CommonMessage> {
@@ -59,8 +82,6 @@ impl OpenAIChat {
                 "#,
                 &tree_string,
             );
-            //self.trim_messages_to_token_limit();
-            self.messages.push(message);
             
             match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
                 Ok(response) => {
@@ -68,7 +89,6 @@ impl OpenAIChat {
                         role: Role::Assistant,
                         content: response.content.clone()
                     };
-                    self.messages.push(new_msg.clone());
                     Ok(new_msg)
                 },
                 Err(e) => {

@@ -26,7 +26,6 @@ impl Chat for AnthropicChat {
     }
 
     async fn handle_message(&mut self, message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
-        println!("{:#?}", message.clone());
         match message.role {
             Role::User => {
                 Ok(self.send_message(message.clone()).await?)

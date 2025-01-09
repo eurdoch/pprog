@@ -79,7 +79,6 @@ impl ProjectConfig {
         String::new()
     }
 
-
     pub fn config_path() -> Result<PathBuf, String> {
         GitTree::get_git_root()
             .map(|root| root.join(Self::CONFIG_FILE))
