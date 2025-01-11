@@ -2,6 +2,8 @@ use std::fs;
 use std::process::Command;
 use anyhow::Result;
 
+use crate::config::ProjectConfig;
+
 pub struct Tools;
 
 impl Tools {
@@ -27,10 +29,12 @@ impl Tools {
         }
     }
 
-    fn compile_check(cmd: &str) -> Result<String> {
+    fn compile_check() -> Result<String, anyhow::Error> {
+        let config = ProjectConfig::load().map_err(|e| anyhow::anyhow!("{}", e))?;
+
         let output = Command::new("bash")
             .arg("-c")
-            .arg(cmd)
+            .arg(config.check_cmd)
             .output()?;
 
         if output.status.success() {
@@ -72,11 +76,7 @@ impl Tools {
                 Tools::execute(statement)
             },
             "compile_check" => {
-                let cmd = inputs.get("cmd")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::Error::msg("Missing or invalid 'cmd' input".to_string()))?;
-
-                Tools::compile_check(cmd)
+                Tools::compile_check()
             },
             _ => Err(anyhow::Error::msg(format!("Invalid tool name: {}", name))),
         }

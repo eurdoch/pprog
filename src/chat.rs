@@ -73,6 +73,7 @@ impl Chat {
         self.messages.push(message.clone());
         let return_msg = self.send_messages().await?;
         self.messages.push(return_msg.clone());
+        println!("{:#?}", self.messages.clone());
         Ok(return_msg)
     }
 

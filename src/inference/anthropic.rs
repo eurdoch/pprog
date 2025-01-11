@@ -112,19 +112,13 @@ impl AnthropicTools {
                 schema_type: "object".to_string(),
                 properties: {
                     let mut map = HashMap::new();
-                    map.insert(
-                        "cmd".to_string(),
-                        PropertySchema {
-                            property_type: "string".to_string(),
-                            description: "The command to check for compiler/interpreter errors.".to_string(),
-                        },
-                    );
                     map
                 },
-                required: vec!["cmd".to_string()],
+                required: vec![],
             },
         }
     }
+
 }
 
 #[derive(Serialize)]
