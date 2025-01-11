@@ -4,8 +4,8 @@ pprog is an LLM based pair programmer for working on coding projects.  it can ge
 This is experimental and unstable code, it may change at any time.  It has solid support for Claude models through the Anthropic API, as well as OpenAI and Deepseek through their OpenAI compatible endpoint.  Still working on support for o1 as the lack of system prompt makes it more difficult to implement.  The program should work with any OpenAI compatible API using a base url but is not guaranteed.
 
 ## prereqs
-- Rust (cargo)
-- Browser
+- rust
+- browser
 - git
 
 To install Rust, go to their [website](https://www.rust-lang.org/).
