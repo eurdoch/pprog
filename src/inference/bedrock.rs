@@ -6,7 +6,7 @@ use aws_sdk_bedrockruntime::Client as BedrockClient;
 use aws_sdk_bedrockruntime::primitives::Blob;
 use serde_json::json;
 
-use crate::chat::chat::CommonMessage;
+use crate::chat::CommonMessage;
 
 use super::types::{ModelResponse, InferenceError};
 use super::tools::{AnthropicTool, InputSchema, PropertySchema};

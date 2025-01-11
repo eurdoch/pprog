@@ -3,6 +3,7 @@ mod chat;
 mod tree;
 mod config;
 mod server;
+mod tools;
 
 use std::fs::OpenOptions;
 use std::io::Write;

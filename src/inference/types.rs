@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 use serde::de::Error as SerdeError;
 use anyhow::Result;
 
-use crate::chat::chat::ContentItem;
+use crate::chat::ContentItem;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ModelResponse {

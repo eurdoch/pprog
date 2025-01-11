@@ -3,7 +3,7 @@ use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
 
-use crate::chat::chat::{CommonMessage, ContentItem};
+use crate::chat::{CommonMessage, ContentItem};
 use crate::config::ProjectConfig;
 use super::types::{
     InferenceError, ModelResponse

@@ -10,7 +10,7 @@ use actix_web::http;
 use std::process::Command;
 use std::str;
 
-use crate::chat::{chat::{Chat, CommonMessage}, tools::Tools};
+use crate::{chat::{Chat, CommonMessage}, tools::Tools};
 
 #[derive(Deserialize)]
 pub struct ChatRequest {

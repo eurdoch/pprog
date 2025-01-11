@@ -4,7 +4,7 @@ use serde::{Serialize, Deserialize};
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::chat::chat::{CommonMessage, ContentItem, Role};
+use crate::chat::{CommonMessage, ContentItem, Role};
 use crate::config::ProjectConfig;
 use super::types::{
     InferenceError, ModelResponse

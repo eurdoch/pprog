@@ -4,7 +4,7 @@ use serde::{Serialize, Deserialize};
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::chat::chat::Role;
+use crate::chat::Role;
 use crate::config::ProjectConfig;
 use super::types::InferenceError;
 use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
