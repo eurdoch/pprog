@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
-use serde_json::Value;
+use async_trait::async_trait;
 
-use crate::chat::Role;
+use crate::chat::{Role, CommonMessage, ContentItem};
 use crate::config::ProjectConfig;
-use super::types::InferenceError;
+use super::types::{InferenceError, ModelResponse};
 use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
+use super::inference::Inference;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DeepSeekModelResponse {
@@ -29,19 +30,13 @@ pub struct Choice {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(untagged)]
-pub enum DeepSeekMessage {
-    Regular {
-        role: Role,
-        content: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        tool_calls: Option<Vec<ToolCall>>,
-    },
-    Tool {
-        role: Role,
-        content: String,
-        tool_call_id: String,
-    }
+pub struct DeepSeekMessage {
+    role: Role,
+    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -55,7 +50,7 @@ pub struct ToolCall {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Function {
-    pub arguments: Value,
+    pub arguments: String,
     pub name: String,
 }
 
@@ -84,8 +79,9 @@ pub struct DeepSeekInference {
     max_output_tokens: u32,
 }
 
-impl DeepSeekInference {
-    pub fn new() -> Self {
+#[async_trait]
+impl Inference for DeepSeekInference {
+    fn new() -> Self {
         let config = match ProjectConfig::load() {
             Ok(config) => config,
             Err(_) => ProjectConfig::default(),
@@ -100,6 +96,42 @@ impl DeepSeekInference {
         }
     }
 
+    async fn query_model(
+        &self,
+        messages: Vec<CommonMessage>,
+        system_message: Option<&str>
+    ) -> Result<ModelResponse, InferenceError> {
+        let deepseek_response = self.query_deepseek(messages, system_message).await?;
+        let mut content: Vec<ContentItem> = Vec::new();
+        if !deepseek_response.choices[0].message.content.is_empty() {
+            content.push(ContentItem::Text { text: deepseek_response.choices[0].message.content.clone() });
+        }
+        if let Some(tool_calls) = deepseek_response.choices[0].message.tool_calls.clone() {
+            for tool_call in tool_calls {
+                let input = serde_json::from_str(&tool_call.function.arguments)?;
+                content.push(
+                    ContentItem::ToolUse {
+                        id: tool_call.id,
+                        name: tool_call.function.name,
+                        input,
+                    }
+                )
+
+            }
+        }
+        
+        Ok(ModelResponse {
+            model: deepseek_response.model,
+            role: deepseek_response.choices[0].message.role.to_string(),
+            message_type: "message".to_string(),
+            stop_reason: deepseek_response.choices[0].finish_reason.clone(),
+            stop_sequence: None,
+            content,
+        })
+    }
+}
+
+impl DeepSeekInference {
     fn get_tools(&self) -> Vec<OpenAITool> {
         vec![
             self.read_file_tool(),
@@ -220,30 +252,65 @@ impl DeepSeekInference {
         serde_json::to_value(self.get_tools())
     }
 
-    pub async fn query_model(
+    async fn query_deepseek(
         &self,
-        mut messages: Vec<DeepSeekMessage>,
+        messages: Vec<CommonMessage>,
         system_message: Option<&str>
     ) -> Result<DeepSeekModelResponse, InferenceError> {
-        println!("Messages: {:#?}", messages.clone());
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("DeepSeek API key not found".to_string()));
         }
 
+        let mut deepseek_messages: Vec<DeepSeekMessage> = messages.iter().map(|message| {
+            let mut parsed_message: DeepSeekMessage = DeepSeekMessage { 
+                role: Role::User,
+                content: "".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+            };
+
+            for content_item in message.content.clone() {
+                match content_item {
+                    ContentItem::Text { text } => {
+                        parsed_message.content = text;
+                    },
+                    ContentItem::ToolUse { id, name, input } => {
+                        parsed_message.tool_calls = Some(vec![ToolCall {
+                            function: Function {
+                                arguments: input.to_string(),
+                                name,
+                            },
+                            id,
+                            index: 0,
+                            call_type: "function".to_string(),
+                        }]);
+                    },
+                    ContentItem::ToolResult { tool_use_id, content } => {
+                        parsed_message.role = Role::Tool;
+                        parsed_message.tool_call_id = Some(tool_use_id);
+                        parsed_message.content = content;
+                    }
+                }
+            }
+            parsed_message
+        }).collect();
+
         if let Some(sys_msg) = system_message {
-            messages.insert(0, DeepSeekMessage::Regular {
+            deepseek_messages.insert(0, DeepSeekMessage {
                 role: Role::System,
                 content: sys_msg.to_string(),
                 tool_calls: None,
+                tool_call_id: None,
             });
         }
+        println!("{:#?}", deepseek_messages);
 
         let tools = self.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string())).ok();
 
         let request = DeepSeekRequest {
             model: self.model.clone(),
-            messages,
+            messages: deepseek_messages,
             max_tokens: Some(self.max_output_tokens),
             tools,
         };
@@ -259,6 +326,11 @@ impl DeepSeekInference {
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
+
+        //DEBUG
+        //let response_json: Value = serde_json::from_str(&response_text).map_err(|e| println!("{}", e.to_string())).unwrap();
+        //println!("{:#?}", response_json);
+
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
         }

@@ -111,7 +111,7 @@ impl AnthropicTools {
             input_schema: InputSchema {
                 schema_type: "object".to_string(),
                 properties: {
-                    let mut map = HashMap::new();
+                    let map = HashMap::new();
                     map
                 },
                 required: vec![],

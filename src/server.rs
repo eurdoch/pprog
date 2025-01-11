@@ -133,6 +133,7 @@ async fn chat_handler(
 async fn tool_handler(
     req: web::Json<ToolRequest>
 ) -> impl Responder {
+    println!("{:#?}", &req.input);
     match Tools::handle_tool_use(&req.name, &req.input) {
         Ok(tool_result) => HttpResponse::Ok().json(ToolResponse {
             tool_use_id: req.0.id,

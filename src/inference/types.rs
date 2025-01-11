@@ -71,6 +71,12 @@ pub enum InferenceError {
     SerializationError(String),
 }
 
+impl From<serde_json::Error> for InferenceError {
+    fn from(_error: serde_json::Error) -> Self {
+        InferenceError::SerializationError("Failed to parse inputs for tool use.".to_string())
+    }
+}
+
 impl std::fmt::Display for InferenceError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {

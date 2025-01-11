@@ -1,7 +1,8 @@
+use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
 
-use crate::inference::OpenAIInference;
+use crate::inference::{DeepSeekInference, OpenAIInference};
 use crate::{config::ProjectConfig, inference::AnthropicInference, tree::GitTree};
 use crate::inference::inference::Inference;
 
@@ -49,6 +50,18 @@ pub enum Role {
     Tool,      // Deepseek API uses tool role for tool results
 }
 
+impl fmt::Display for Role {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Role::User => write!(f, "user"),
+            Role::Assistant => write!(f, "assistant"),
+            Role::System => write!(f, "system"),
+            Role::Developer => write!(f, "developer"),
+            Role::Tool => write!(f, "tool"),
+        }
+    }
+}
+
 pub struct Chat {
     pub messages: Vec<CommonMessage>,
     inference: Box<dyn Inference>,
@@ -61,6 +74,7 @@ impl Chat {
         let inference: Box<dyn Inference> = match config.provider.as_str() {
             "anthropic" => Box::new(AnthropicInference::new()),
             "openai" => Box::new(OpenAIInference::new()),
+            "deepseek" => Box::new(DeepSeekInference::new()),
             _ => Box::new(AnthropicInference::new()),
         };
 
@@ -109,7 +123,7 @@ impl Chat {
                 Ok(new_msg)
             },
             Err(e) => {
-                Err(anyhow::anyhow!("Anthropic Inference Error: {}", e))
+                Err(anyhow::anyhow!("Inference Error: {}", e))
             }
         }
     }
