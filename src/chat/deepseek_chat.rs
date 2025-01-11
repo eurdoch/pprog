@@ -56,6 +56,7 @@ impl Chat for DeepSeekChat {
             _ => {
                 match self.send_messages().await {
                     Ok(return_msg) => {
+                        self.messages.push(return_msg.clone());
                         let return_common_msg = convert_to_common_message(&return_msg);
                         Ok(return_common_msg)
                     }
