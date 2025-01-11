@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
-use serde_json::Value;
 use async_trait::async_trait;
+use serde_json::Value;
 
 use crate::chat::{CommonMessage, ContentItem, Role};
 use crate::config::ProjectConfig;
@@ -14,7 +14,7 @@ use super::inference::Inference;
 #[derive(Serialize)]
 struct OpenAIRequest {
     model: String,
-    messages: Vec<serde_json::Value>,
+    messages: Vec<OpenAIMessage>,
     max_tokens: Option<u32>,
     tools: Option<serde_json::Value>,
 }
@@ -31,36 +31,25 @@ struct OpenAIChoice {
     finish_reason: String,
 }
 
-fn deserialize_content<'de, D>(deserializer: D) -> Result<Vec<ContentItem>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum ContentWrapper {
-        String(String),
-        Null,
-        Array(Vec<ContentItem>),
-    }
-
-    let wrapper = ContentWrapper::deserialize(deserializer)?;
-    match wrapper {
-        ContentWrapper::String(s) => Ok(vec![ContentItem::Text { text: s }]),
-        ContentWrapper::Null => Ok(vec![]),
-        ContentWrapper::Array(v) => Ok(v),
-    }
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct OpenAIMessage {
-    role: String,
-    #[serde(deserialize_with = "deserialize_content")]
-    content: Vec<ContentItem>,
-    #[serde(default)]
+    role: Role,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<OpenAIContent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<OpenAIToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+enum OpenAIContent {
+    String(String),
+    Array(Vec<ContentItem>),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct OpenAIToolCall {
     id: String,
     #[serde(rename = "type")]
@@ -68,7 +57,7 @@ struct OpenAIToolCall {
     function: OpenAIFunctionCall,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct OpenAIFunctionCall {
     name: String,
     arguments: String,
@@ -222,40 +211,51 @@ impl Inference for OpenAIInference {
         Self::default()
     }
 
-    async fn query_model(&self, mut messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+    async fn query_model(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+
+        let mut openai_messages: Vec<OpenAIMessage> = messages.into_iter().map(|msg| {
+            let mut openai_message = OpenAIMessage {
+                role: msg.role,
+                content: Some(OpenAIContent::String("".to_string())),
+                tool_calls: None,
+                tool_call_id: None,
+            };
+            for content_item in msg.content {
+                match content_item {
+                    ContentItem::Text { text } => {
+                        openai_message.content = Some(OpenAIContent::String(text));
+                    },
+                    ContentItem::ToolUse { id, name, input } => {
+                        openai_message.tool_calls = Some(vec![OpenAIToolCall {
+                            id,
+                            call_type: "function".to_string(),
+                            function: OpenAIFunctionCall {
+                                name,
+                                arguments: input.to_string(),
+                            }
+                        }]);
+                    },
+                    ContentItem::ToolResult { tool_use_id, content } => {
+                        openai_message.role = Role::Tool;
+                        openai_message.tool_call_id = Some(tool_use_id);
+                        openai_message.content = Some(OpenAIContent::String(content));
+                    }
+                }
+            }
+            openai_message
+        }).collect();
+
         if let Some(sys_msg) = system_message {
-            messages.insert(0, CommonMessage {
+            openai_messages.insert(0, OpenAIMessage {
                 role: Role::System,
-                content: vec![ContentItem::Text { text: sys_msg.to_string() }],
+                content: Some(OpenAIContent::String(sys_msg.to_string())),
+                tool_calls: None,
+                tool_call_id: None,
             });
         }
 
-        let openai_messages: Vec<Value> = messages.into_iter().map(|msg| {
-            let content = msg.content.iter()
-                .filter_map(|item| {
-                    match item {
-                        ContentItem::Text { text } => Some(text.clone()),
-                        _ => None
-                    }
-                })
-                .collect::<Vec<String>>()
-                .join(" ");
-
-            serde_json::json!({
-                "role": match msg.role {
-                    Role::User => "user",
-                    Role::Assistant => "assistant",
-                    Role::System => "system",
-                    Role::Developer => "developer",
-                    Role::Tool => "tool",
-                },
-                "content": content
-            })
-        }).collect();
-
         let tools = self.tool_provider.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string())).ok();
-        println!("{:#?}", openai_messages);
 
         let request = OpenAIRequest {
             model: self.model.clone(),
@@ -287,14 +287,36 @@ impl Inference for OpenAIInference {
         if openai_response.choices.is_empty() {
             return Err(InferenceError::InvalidResponse("No choices in OpenAI response".to_string()));
         }
+        
+        let mut content: Vec<ContentItem> = Vec::new();
+        if let Some(openai_content) = openai_response.choices[0].message.content.clone() {
+            match openai_content {
+                OpenAIContent::String(text) => content.push(ContentItem::Text { text }),
+                OpenAIContent::Array(..) => {},
+            }
+        }
+        if let Some(tool_calls) = &openai_response.choices[0].message.tool_calls {
+            for tool_call in tool_calls {
+                let input = serde_json::from_str(&tool_call.function.arguments)?;
+                content.push(
+                    ContentItem::ToolUse {
+                        id: tool_call.id.clone(),
+                        name: tool_call.function.name.clone(),
+                        input,
+                    }
+                )
 
-        Ok(ModelResponse {
-            content: openai_response.choices[0].message.content.clone(),
+            }
+        }
+
+        let model_response = ModelResponse {
+            content,
             model: openai_response.model,
-            role: openai_response.choices[0].message.role.clone(),
+            role: openai_response.choices[0].message.role.to_string(),
             message_type: "text".to_string(),
             stop_reason: openai_response.choices[0].finish_reason.clone(),
             stop_sequence: None,
-        })
+        };
+        Ok(model_response)
     }
 }

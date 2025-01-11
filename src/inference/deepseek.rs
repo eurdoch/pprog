@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use actix_web::http::header::q;
 use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
@@ -102,6 +103,7 @@ impl Inference for DeepSeekInference {
         system_message: Option<&str>
     ) -> Result<ModelResponse, InferenceError> {
         let deepseek_response = self.query_deepseek(messages, system_message).await?;
+
         let mut content: Vec<ContentItem> = Vec::new();
         if !deepseek_response.choices[0].message.content.is_empty() {
             content.push(ContentItem::Text { text: deepseek_response.choices[0].message.content.clone() });
@@ -325,10 +327,6 @@ impl DeepSeekInference {
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
-
-        //DEBUG
-        //let response_json: Value = serde_json::from_str(&response_text).map_err(|e| println!("{}", e.to_string())).unwrap();
-        //println!("{:#?}", response_json);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
