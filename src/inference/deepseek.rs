@@ -303,7 +303,6 @@ impl DeepSeekInference {
                 tool_call_id: None,
             });
         }
-        println!("{:#?}", deepseek_messages);
 
         let tools = self.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string())).ok();
