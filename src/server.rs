@@ -162,14 +162,6 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
     
     process_files(&DIST_DIR, "", &mut static_files, &mut hbs, &template_data);
 
-    let config = match ProjectConfig::load() {
-        Ok(c) => c,
-        Err(e) => {
-            println!("Error loading config: {}", e);
-            std::process::exit(1);
-        }
-    };
-
     let app_state = web::Data::new(AppState {
         chat: Mutex::new(Chat::new()),
         static_files,
