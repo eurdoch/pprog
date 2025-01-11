@@ -233,9 +233,9 @@ const App: React.FC = () => {
       setInputMessage('');
 
       await handleSendMessage(userMessage);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert(error);
+      alert(error.error);
       setMessages(prev => prev.slice(0, -1));
       setIsProcessing(false);
     } finally {
@@ -258,9 +258,8 @@ const App: React.FC = () => {
 
       if (!response.ok) {
         const data = await response.json();
-        console.error(data);
         setIsProcessing(false);
-        throw new Error(data);
+        throw new Error(data.error);
       }
 
       const data = await response.json();
@@ -284,9 +283,8 @@ const App: React.FC = () => {
 
             if (!response.ok) {
               const data = await response.json();
-              console.error(data);
               setIsProcessing(false);
-              throw new Error(data);
+              throw new Error(data.error);
             }
 
             const data = await response.json();
