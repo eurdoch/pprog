@@ -1,192 +1,117 @@
-use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use serde_json::Number;
 
-pub mod types {
-    use serde::{Deserialize, Serialize};
+use crate::{config::ProjectConfig, inference::AnthropicInference, tree::GitTree};
 
-    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-    #[serde(tag = "type")]
-    pub enum ContentItem {
-        #[serde(rename = "text")]
-        Text {
-            text: String,
-        },
-        #[serde(rename = "tool_use")]
-        ToolUse {
-            id: String,
-            name: String,
-            input: serde_json::Value,
-        },
-        #[serde(rename = "tool_result")]
-        ToolResult {
-            tool_use_id: String,
-            content: String,
-        },
-    }
-
-    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-    pub struct CommonMessage {
-        pub role: Role,
-        pub content: Vec<ContentItem>,
-    }
-
-    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-    #[serde(rename_all = "lowercase")]
-    pub enum Role {
-        User,
-        Assistant,
-        System,
-        Developer, // because OpenAI just had to change the system name
-        Tool,      // Deepseek API uses tool role for tool results
-    }
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(tag = "type")]
+pub enum ContentItem {
+    #[serde(rename = "text")]
+    Text {
+        text: String,
+    },
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+    #[serde(rename = "tool_result")]
+    ToolResult {
+        tool_use_id: String,
+        content: String,
+    },
 }
 
-pub mod convert {
-    use super::types::{CommonMessage, ContentItem, Role};
-    use crate::inference::deepseek::{DeepSeekMessage, Function, ToolCall};
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct Usage {
+    cache_creation_input_tokens: Number,
+    cache_read_input_tokens: Number,
+    input_tokens: Number,
+    output_tokens: Number,
+}
 
-    pub fn convert_to_common_message(msg: &DeepSeekMessage) -> CommonMessage {
-        let mut content = Vec::new();
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct CommonMessage {
+    pub role: Role,
+    pub content: Vec<ContentItem>,
+}
 
-        match msg {
-            DeepSeekMessage::Regular {
-                role,
-                content: msg_content,
-                tool_calls,
-            } => {
-                // Handle tool calls if present
-                if let Some(tool_calls) = tool_calls {
-                    for tool_call in tool_calls {
-                        content.push(ContentItem::ToolUse {
-                            id: tool_call.id.clone(),
-                            name: tool_call.function.name.clone(),
-                            input: serde_json::from_value(tool_call.function.arguments.clone())
-                                .unwrap_or(serde_json::Value::Null),
-                        });
-                    }
-                }
-                // Add text content if not empty
-                if !msg_content.is_empty() {
-                    content.push(ContentItem::Text {
-                        text: msg_content.clone(),
-                    });
-                }
-                CommonMessage {
-                    role: role.clone(),
-                    content,
-                }
-            }
-            DeepSeekMessage::Tool {
-                role,
-                content: msg_content,
-                tool_call_id,
-            } => {
-                content.push(ContentItem::ToolResult {
-                    tool_use_id: tool_call_id.clone(),
-                    content: msg_content.clone(),
-                });
-                CommonMessage {
-                    role: role.clone(),
-                    content,
-                }
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum Role {
+    User,
+    Assistant,
+    System,
+    Developer, // because OpenAI just had to change the system name
+    Tool,      // Deepseek API uses tool role for tool results
+}
+
+pub struct Chat {
+    pub messages: Vec<CommonMessage>,
+    inference: AnthropicInference,
+    max_tokens: usize,
+}
+
+impl Chat {
+    pub fn new() -> Self {
+        let config = ProjectConfig::load().unwrap_or_default();
+
+        Self {
+            messages: Vec::new(),
+            inference: AnthropicInference::new(),
+            max_tokens: config.max_context,
+        }
+    }
+
+    pub async fn handle_message(&mut self, message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
+        self.messages.push(message.clone());
+        let return_msg = self.send_messages().await?;
+        self.messages.push(return_msg.clone());
+        Ok(return_msg)
+    }
+
+    pub async fn send_messages(&mut self) -> Result<CommonMessage, anyhow::Error> {
+        let tree_string = GitTree::get_tree()?;
+        let system_message = format!(
+            r#"
+            You are a coding assistant working on a project.
+            
+            File tree structure:
+            {}
+
+            The user will give you instructions on how to change the project code.
+
+            Always call 'compile_check' tool after completing changes that the user requests.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
+
+            Never make any changes outside of the project's root directory.
+            Always read and write entire file contents.  Never write partial contents of a file.
+
+            The user may also general questions and in that case simply answer but do not execute any tools.
+            "#,
+            &tree_string,
+        );
+        
+        match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
+            Ok(response) => {
+                let new_msg = CommonMessage {
+                    role: Role::Assistant,
+                    content: response.content.clone()
+                };
+                Ok(new_msg)
+            },
+            Err(e) => {
+                Err(anyhow::anyhow!("Anthropic Inference Error: {}", e))
             }
         }
     }
 
-    pub fn convert_to_deepseek_message(msg: &CommonMessage) -> Result<DeepSeekMessage, anyhow::Error> {
-        // Get the text content or tool result content and determine role
-        let (content, tool_call_id) = msg
-            .content
-            .iter()
-            .find_map(|item| match item {
-                ContentItem::Text { text } => Some((text.clone(), None)),
-                ContentItem::ToolResult {
-                    tool_use_id,
-                    content,
-                } => Some((content.clone(), Some(tool_use_id.clone()))),
-                _ => None,
-            })
-            .unwrap_or_else(|| (String::new(), None));
 
-        // If we have a tool_call_id, return a Tool message
-        if let Some(id) = tool_call_id {
-            return Ok(DeepSeekMessage::Tool {
-                role: Role::Tool,
-                content,
-                tool_call_id: id,
-            });
-        }
+    pub fn get_messages(&self) -> Vec<CommonMessage> {
+        self.messages.clone()
+    }
 
-        // Otherwise collect tool calls if they exist
-        let tool_calls = {
-            let calls: Result<Vec<_>, anyhow::Error> = msg
-                .content
-                .iter()
-                .filter_map(|item| {
-                    if let ContentItem::ToolUse { id, name, input } = item {
-                        match input.as_str() {
-                            None => Some(Err(anyhow::anyhow!("Input could not be converted to string"))),
-                            Some(input_string) => match serde_json::from_str(input_string) {
-                                Ok(parsed_arguments) => Some(Ok(ToolCall {
-                                    id: id.clone(),
-                                    function: Function {
-                                        name: name.clone(),
-                                        arguments: parsed_arguments,
-                                    },
-                                    index: 0,
-                                    call_type: "function".to_string(),
-                                })),
-                                Err(e) => Some(Err(anyhow::anyhow!(
-                                    "Failed to parse JSON: {}",
-                                    e
-                                ))),
-                            },
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            match calls {
-                Ok(vec) => {
-                    if vec.is_empty() {
-                        None
-                    } else {
-                        Some(vec)
-                    }
-                }
-                Err(e) => return Err(e),
-            }
-        };
-
-        Ok(DeepSeekMessage::Regular {
-            role: msg.role.clone(),
-            content,
-            tool_calls,
-        })
+    pub fn clear(&mut self) {
+        self.messages.clear();
     }
 }
-
-#[async_trait]
-pub trait Chat: Send + Sync {
-    /// Initialize a new chat instance
-    /// This is async because AWS Bedrock init requires async
-    async fn new() -> Self
-    where
-        Self: Sized;
-
-    /// Handle an incoming message and return a response
-    async fn handle_message(
-        &mut self,
-        message: &types::CommonMessage,
-    ) -> Result<types::CommonMessage, anyhow::Error>;
-
-    /// Get all messages in the conversation
-    fn get_messages(&self) -> Vec<types::CommonMessage>;
-
-    /// Clear the chat history
-    fn clear(&mut self);
-}
-
-pub use convert::*;
-pub use types::*;

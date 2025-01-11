@@ -264,21 +264,39 @@ const App: React.FC = () => {
 
       const data = await response.json();
 
+      setMessages(prev => [
+        ...prev,
+        data.message
+      ]);
       for (let contentItem of data.message.content) {
-        setMessages(prevMessages => [
-          ...prevMessages,
-          {
-            role: data.message.role,
-            content: [contentItem],
-          },
-        ]);
         switch(contentItem.type) {
           case "text":
             break;
           case "tool_use":
+            const response = await fetch(`${window.SERVER_URL}/tools`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ ...contentItem })
+            });
+
+            if (!response.ok) {
+              const data = await response.json();
+              console.error(data);
+              setIsProcessing(false);
+              throw new Error(data);
+            }
+
+            const data = await response.json();
+            
             await handleSendMessage({
-              role: "assistant",
-              content: [contentItem],
+              role: "user",
+              content: [{
+                type: "tool_result",
+                tool_use_id: data.tool_use_id,
+                content: data.content
+              }],
             });
             break;
           case "tool_result":
