@@ -1,3 +1,4 @@
+pub mod inference;
 pub mod anthropic;
 pub mod openai;
 pub mod deepseek;

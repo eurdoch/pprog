@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Number;
 
 use crate::{config::ProjectConfig, inference::AnthropicInference, tree::GitTree};
+use crate::inference::inference::Inference;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(tag = "type")]
@@ -49,17 +50,21 @@ pub enum Role {
 
 pub struct Chat {
     pub messages: Vec<CommonMessage>,
-    inference: AnthropicInference,
+    inference: Box<dyn Inference>,
     max_tokens: usize,
 }
 
 impl Chat {
     pub fn new() -> Self {
         let config = ProjectConfig::load().unwrap_or_default();
+        let inference = match config.provider.as_str() {
+            "anthropic" => Box::new(AnthropicInference::new()),
+            _ => Box::new(AnthropicInference::new()),
+        };
 
         Self {
             messages: Vec::new(),
-            inference: AnthropicInference::new(),
+            inference,
             max_tokens: config.max_context,
         }
     }

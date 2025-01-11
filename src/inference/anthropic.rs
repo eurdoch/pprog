@@ -2,70 +2,33 @@ use std::collections::HashMap;
 use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
+use async_trait::async_trait;
 
 use crate::chat::{CommonMessage, ContentItem};
 use crate::config::ProjectConfig;
-use super::types::{
-    InferenceError, ModelResponse
-};
+use super::inference::Inference;
+use super::types::{InferenceError, ModelResponse};
 use super::tools::{AnthropicTool, InputSchema, PropertySchema};
 
-#[derive(Serialize)]
-struct AnthropicRequest<'a> {
-    model: &'a str,
-    messages: Vec<CommonMessage>,
-    max_tokens: u32,
-    tools: serde_json::Value,
-    system: String,
-}
+// New struct to manage tools
+pub struct AnthropicTools;
 
-#[derive(Debug, Deserialize)]
-struct AnthropicResponse {
-    id: String,
-    model: String,
-    role: String,
-    content: Vec<ContentItem>,
-    stop_reason: String,
-    stop_sequence: Option<String>,
-}
-
-pub struct AnthropicInference {
-    model: String,
-    client: Client,
-    api_url: String,
-    api_key: String,
-    max_output_tokens: u32,
-}
-
-impl std::default::Default for AnthropicInference {
-    fn default() -> Self {
-        let config = match ProjectConfig::load() {
-            Ok(config) => config,
-            Err(_) => ProjectConfig::default(),
-        };
-        
-        AnthropicInference {
-            model: config.model,
-            client: Client::new(),
-            api_url: config.api_url,
-            api_key: config.api_key,
-            max_output_tokens: config.max_output_tokens,
-        }
-    }
-}
-
-impl AnthropicInference {
+impl AnthropicTools {
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
-    fn get_tools(&self) -> Vec<AnthropicTool> {
+    pub fn get_tools(&self) -> Vec<AnthropicTool> {
         vec![
             self.read_file_tool(),
             self.write_file_tool(),
             self.execute_tool(),
             self.compile_check_tool(),
         ]
+    }
+
+    pub fn get_tools_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::to_value(self.get_tools())
     }
 
     fn read_file_tool(&self) -> AnthropicTool {
@@ -122,7 +85,7 @@ impl AnthropicInference {
     fn execute_tool(&self) -> AnthropicTool {
         AnthropicTool {
             name: "execute".to_string(),
-            description: "Execute bash statements as a single string..".to_string(),
+            description: "Execute bash statements as a single string.".to_string(),
             input_schema: InputSchema {
                 schema_type: "object".to_string(),
                 properties: {
@@ -162,19 +125,68 @@ impl AnthropicInference {
             },
         }
     }
+}
 
-    fn get_tools_json(&self) -> Result<serde_json::Value, serde_json::Error> {
-        serde_json::to_value(self.get_tools())
+#[derive(Serialize)]
+struct AnthropicRequest<'a> {
+    model: &'a str,
+    messages: Vec<CommonMessage>,
+    max_tokens: u32,
+    tools: serde_json::Value,
+    system: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicResponse {
+    id: String,
+    model: String,
+    role: String,
+    content: Vec<ContentItem>,
+    stop_reason: String,
+    stop_sequence: Option<String>,
+}
+
+pub struct AnthropicInference {
+    model: String,
+    client: Client,
+    api_url: String,
+    api_key: String,
+    max_output_tokens: u32,
+    tools: AnthropicTools,
+}
+
+impl std::default::Default for AnthropicInference {
+    fn default() -> Self {
+        let config = match ProjectConfig::load() {
+            Ok(config) => config,
+            Err(_) => ProjectConfig::default(),
+        };
+        
+        AnthropicInference {
+            model: config.model,
+            client: Client::new(),
+            api_url: config.api_url,
+            api_key: config.api_key,
+            max_output_tokens: config.max_output_tokens,
+            tools: AnthropicTools::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl Inference for AnthropicInference {
+    fn new() -> Self {
+        Self::default()
     }
 
-    pub async fn query_model(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+    async fn query_model(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("Anthropic API key not found".to_string()));
         }
 
         let system = system_message.unwrap_or("").to_string();
 
-        let tools = self.get_tools_json()
+        let tools = self.tools.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string()))?;
 
         let request = AnthropicRequest {
@@ -215,12 +227,6 @@ impl AnthropicInference {
             message_type: "text".to_string(),
             stop_reason: anthropic_response.stop_reason,
             stop_sequence: anthropic_response.stop_sequence,
-            //usage: Some(Usage {
-            //    input_tokens: anthropic_response.usage.input_tokens,
-            //    cache_creation_input_tokens: 0,
-            //    cache_read_input_tokens: 0,
-            //    output_tokens: anthropic_response.usage.output_tokens,
-            //}),
         })
     }
 }
