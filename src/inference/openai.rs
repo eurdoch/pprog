@@ -3,13 +3,13 @@ use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
 use serde_json::Value;
+use async_trait::async_trait;
 
 use crate::chat::{CommonMessage, ContentItem, Role};
 use crate::config::ProjectConfig;
-use super::types::{
-    InferenceError, ModelResponse
-};
+use super::types::{InferenceError, ModelResponse};
 use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
+use super::inference::Inference;
 
 #[derive(Serialize)]
 struct OpenAIRequest {
@@ -74,46 +74,27 @@ struct OpenAIFunctionCall {
     arguments: String,
 }
 
-pub struct OpenAIInference {
-    model: String,
-    client: Client,
-    api_url: String,
-    api_key: String,
-    max_output_tokens: u32,
+pub struct OpenAIToolProvider {
+    tools: Vec<OpenAITool>,
 }
 
-impl std::default::Default for OpenAIInference {
-    fn default() -> Self {
-        let config = match ProjectConfig::load() {
-            Ok(config) => config,
-            Err(_) => ProjectConfig::default(),
-        };
-        
-        OpenAIInference {
-            model: config.model,
-            client: Client::new(),
-            api_url: config.api_url,
-            api_key: config.api_key,
-            max_output_tokens: config.max_output_tokens,
+impl OpenAIToolProvider {
+    pub fn new() -> Self {
+        Self {
+            tools: vec![
+                Self::read_file_tool(),
+                Self::write_file_tool(),
+                Self::execute_tool(),
+                Self::compile_check_tool(),
+            ],
         }
     }
-}
 
-impl OpenAIInference {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn get_tools_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::to_value(&self.tools)
     }
 
-    fn get_tools(&self) -> Vec<OpenAITool> {
-        vec![
-            self.read_file_tool(),
-            self.write_file_tool(),
-            self.execute_tool(),
-            self.compile_check_tool(),
-        ]
-    }
-
-    fn read_file_tool(&self) -> OpenAITool {
+    fn read_file_tool() -> OpenAITool {
         OpenAITool {
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
@@ -138,7 +119,7 @@ impl OpenAIInference {
         }
     }
 
-    fn write_file_tool(&self) -> OpenAITool {
+    fn write_file_tool() -> OpenAITool {
         OpenAITool {
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
@@ -170,7 +151,7 @@ impl OpenAIInference {
         }
     }
 
-    fn execute_tool(&self) -> OpenAITool {
+    fn execute_tool() -> OpenAITool {
         OpenAITool {
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
@@ -195,7 +176,7 @@ impl OpenAIInference {
         }
     }
 
-    fn compile_check_tool(&self) -> OpenAITool {
+    fn compile_check_tool() -> OpenAITool {
         OpenAITool {
             tool_type: "function".to_string(),
             function: OpenAIToolFunction {
@@ -203,28 +184,45 @@ impl OpenAIInference {
                 description: "Check if project compiles or runs without error.".to_string(),
                 parameters: InputSchema {
                     schema_type: "object".to_string(),
-                    properties: {
-                        let mut map = HashMap::new();
-                        map.insert(
-                            "cmd".to_string(),
-                            PropertySchema {
-                                property_type: "string".to_string(),
-                                description: "The command to check for compiler/interpreter errors.".to_string(),
-                            },
-                        );
-                        map
-                    },
-                    required: vec!["cmd".to_string()],
+                    properties: HashMap::new(),
+                    required: vec![],
                 },
             },
         }
     }
+}
 
-    fn get_tools_json(&self) -> Result<serde_json::Value, serde_json::Error> {
-        serde_json::to_value(self.get_tools())
+pub struct OpenAIInference {
+    model: String,
+    client: Client,
+    api_url: String,
+    api_key: String,
+    max_output_tokens: u32,
+    tool_provider: OpenAIToolProvider,
+}
+
+impl std::default::Default for OpenAIInference {
+    fn default() -> Self {
+        let config = ProjectConfig::load().unwrap_or_default();
+        
+        OpenAIInference {
+            model: config.model,
+            client: Client::new(),
+            api_url: config.api_url,
+            api_key: config.api_key,
+            max_output_tokens: config.max_output_tokens,
+            tool_provider: OpenAIToolProvider::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl Inference for OpenAIInference {
+    fn new() -> Self {
+        Self::default()
     }
 
-    pub async fn query_model(&self, mut messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
+    async fn query_model(&self, mut messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         if let Some(sys_msg) = system_message {
             messages.insert(0, CommonMessage {
                 role: Role::System,
@@ -232,7 +230,6 @@ impl OpenAIInference {
             });
         }
 
-        // TODO what is this doing?
         let openai_messages: Vec<Value> = messages.into_iter().map(|msg| {
             let content = msg.content.iter()
                 .filter_map(|item| {
@@ -256,8 +253,9 @@ impl OpenAIInference {
             })
         }).collect();
 
-        let tools = self.get_tools_json()
+        let tools = self.tool_provider.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string())).ok();
+        println!("{:#?}", openai_messages);
 
         let request = OpenAIRequest {
             model: self.model.clone(),
@@ -267,7 +265,7 @@ impl OpenAIInference {
         };
 
         let response = self.client
-            .post(format!("{}", self.api_url))
+            .post(&self.api_url)
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&request)
@@ -290,39 +288,13 @@ impl OpenAIInference {
             return Err(InferenceError::InvalidResponse("No choices in OpenAI response".to_string()));
         }
 
-        let first_choice = &openai_response.choices[0].message;
-        let mut content = first_choice.content.clone();
-
-        // Handle tool calls if present
-        if let Some(tool_calls) = &first_choice.tool_calls {
-            for tool_call in tool_calls {
-                if tool_call.call_type == "function" {
-                    // Parse the arguments as JSON Value
-                    let input: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
-                        .map_err(|e| InferenceError::SerializationError(format!("Failed to parse tool arguments: {}", e)))?;
-
-                    content.push(ContentItem::ToolUse {
-                        id: tool_call.id.clone(),
-                        name: tool_call.function.name.clone(),
-                        input,
-                    });
-                }
-            }
-        }
-
         Ok(ModelResponse {
-            content,
+            content: openai_response.choices[0].message.content.clone(),
             model: openai_response.model,
-            role: first_choice.role.clone(),
+            role: openai_response.choices[0].message.role.clone(),
             message_type: "text".to_string(),
             stop_reason: openai_response.choices[0].finish_reason.clone(),
             stop_sequence: None,
-            //usage: Some(Usage {
-            //    input_tokens: openai_response.usage.prompt_tokens,
-            //    cache_creation_input_tokens: 0,
-            //    cache_read_input_tokens: 0,
-            //    output_tokens: openai_response.usage.completion_tokens,
-            //}),
         })
     }
 }

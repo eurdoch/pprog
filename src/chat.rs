@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
 
+use crate::inference::OpenAIInference;
 use crate::{config::ProjectConfig, inference::AnthropicInference, tree::GitTree};
 use crate::inference::inference::Inference;
 
@@ -57,8 +58,9 @@ pub struct Chat {
 impl Chat {
     pub fn new() -> Self {
         let config = ProjectConfig::load().unwrap_or_default();
-        let inference = match config.provider.as_str() {
+        let inference: Box<dyn Inference> = match config.provider.as_str() {
             "anthropic" => Box::new(AnthropicInference::new()),
+            "openai" => Box::new(OpenAIInference::new()),
             _ => Box::new(AnthropicInference::new()),
         };
 
