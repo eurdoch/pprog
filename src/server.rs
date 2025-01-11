@@ -1,26 +1,38 @@
-use actix_web::{web, App, HttpResponse, HttpServer, Responder, get, HttpRequest};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder, get, HttpRequest, post};
 use actix_cors::Cors;
 use handlebars::Handlebars;
 use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::sync::Mutex;
 use std::collections::HashMap;
 use actix_web::http;
 use std::process::Command;
 use std::str;
 
-use crate::chat::chat::{Chat, CommonMessage};
-use crate::config::ProjectConfig;
+use crate::chat::{chat::{Chat, CommonMessage}, tools::Tools};
 
 #[derive(Deserialize)]
 pub struct ChatRequest {
     message: CommonMessage,
 }
 
+#[derive(Deserialize)]
+pub struct ToolRequest {
+    id: String,
+    name: String,
+    input: Value,
+}
+
 #[derive(Serialize, Clone)]
 pub struct ChatResponse {
     message: CommonMessage,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ToolResponse {
+    tool_use_id: String,
+    content: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -118,6 +130,20 @@ async fn chat_handler(
     }
 }
 
+async fn tool_handler(
+    req: web::Json<ToolRequest>
+) -> impl Responder {
+    match Tools::handle_tool_use(&req.name, &req.input) {
+        Ok(tool_result) => HttpResponse::Ok().json(ToolResponse {
+            tool_use_id: req.0.id,
+            content: tool_result,
+        }),
+        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: e.to_string(),
+        })
+    }
+}
+
 fn process_files(
     dir: &Dir,
     base_path: &str,
@@ -187,6 +213,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
             .wrap(cors)
             .app_data(app_state.clone())
             .route("/chat", web::post().to(chat_handler))
+            .route("/tools", web::post().to(tool_handler))
             .service(clear_chat)
             .service(get_messages)
             .service(get_diff)
@@ -233,3 +260,4 @@ async fn index(
 
     HttpResponse::NotFound().body(format!("File not found: {}", path))
 }
+

@@ -168,7 +168,6 @@ impl AnthropicInference {
     }
 
     pub async fn query_model(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
-        println!("{:#?}", messages.clone());
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("Anthropic API key not found".to_string()));
         }

@@ -40,7 +40,7 @@ impl Tools {
         }
     }
 
-    pub fn handle_tool_use(name: String, inputs: serde_json::Value) -> Result<String, anyhow::Error> {
+    pub fn handle_tool_use(name: &String, inputs: &serde_json::Value) -> Result<String, anyhow::Error> {
         match name.as_str() {
             "read_file" => {
                 let path = inputs.get("path")
