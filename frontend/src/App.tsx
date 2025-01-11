@@ -259,7 +259,7 @@ const App: React.FC = () => {
         const data = await response.json();
         console.error(data);
         setIsProcessing(false);
-        return;
+        throw new Error(data);
       }
 
       const data = await response.json();
@@ -340,27 +340,30 @@ const App: React.FC = () => {
     <div className="chat-container">
       <div className="chat-messages">
         {messages.map((message, index) => {
-            switch (message.content[0].type) {
-              case "text":
-                return <div
-                  key={index}
-                  className={`message ${message.role === "user" ? "user-msg" : "bot-msg"}`}
-                >
-                  {renderTextWithCodeBlocks(message.content[0].text)}
-                </div>
-              case "tool_use":
-                return <div
-                  key={index}
-                  className="message tool-msg"
-                >
-                  {"Using tool: " + message.content[0].name}
-                </div>
-              default:
-                return null;
-            }
+            return message.content.map((contentItem, contentIndex) => {
+              switch (contentItem.type) {
+                case "text":
+                  return <div
+                    key={`${index}-${contentIndex}`}
+                    className={`message ${message.role === "user" ? "user-msg" : "bot-msg"}`}
+                  >
+                    {renderTextWithCodeBlocks(contentItem.text)}
+                  </div>
+                case "tool_use":
+                  return <div
+                    key={`${index}-${contentIndex}`}
+                    className="message tool-msg"
+                  >
+                    {"Using tool: " + contentItem.name}
+                  </div>
+                default:
+                  return null;
+              }
+            })
         })}
         <div ref={messagesEndRef} />
       </div>
+
       {showFab && (
         <button 
           className="fab"
