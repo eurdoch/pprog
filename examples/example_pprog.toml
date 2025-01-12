@@ -1,4 +1,3 @@
-
 # Example configs for nodejs project
 
 provider = "openai"
@@ -17,11 +16,12 @@ max_context = 128000
 max_output_tokens = 8096
 
 # Using bedrock requires that AWS credentials and config are setup in ~/.aws/credentials and ~/.aws/config respectively
-provider = "bedrock"
-model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
-check_cmd = "timeout 3s node index.js" # On Macs use gtimeout
-max_context = 100000
-max_output_tokens = 8096
+# Not currently working
+#provider = "bedrock"
+#model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+#check_cmd = "timeout 3s node index.js" # On Macs use gtimeout
+#max_context = 100000
+#max_output_tokens = 8096
 
 # Deepseek via OpenAI endpoint
 provider = "openai"
