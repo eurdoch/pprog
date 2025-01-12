@@ -52,8 +52,8 @@ impl ModelResponse {
             .and_then(|v| v.as_str())
             .map(String::from);
 
-        let output_tokens = value.get("output_tokens")
-                .and_then(|v| v.as_str().map(|s| s.parse::<u64>().ok()).flatten())
+        let total_tokens = value.get("total_tokens")
+                .and_then(|v| v.as_u64())
                 .unwrap_or(0);
 
         Ok(ModelResponse {
@@ -63,7 +63,7 @@ impl ModelResponse {
             message_type,
             stop_reason,
             stop_sequence,
-            output_tokens,
+            total_tokens,
         })
     }
 }

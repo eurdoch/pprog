@@ -130,6 +130,17 @@ struct AnthropicRequest<'a> {
     system: String,
 }
 
+#[derive(Serialize)]
+struct TokenCountRequest<'a> {
+    model: &'a str,
+    messages: Vec<CommonMessage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TokenCountResponse {
+    token_count: u64,
+}
+
 #[derive(Debug, Deserialize)]
 struct AnthropicResponse {
     model: String,
@@ -142,8 +153,6 @@ struct AnthropicResponse {
 
 #[derive(Debug, Deserialize)]
 struct Usage {
-    cache_creation_input_tokens: u64,
-    cache_read_input_tokens: u64,
     input_tokens: u64,
     output_tokens: u64,
 }
@@ -212,8 +221,6 @@ impl Inference for AnthropicInference {
         let status = response.status();
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
-        let response_json: serde_json::Value = serde_json::from_str(&response_text).unwrap();
-        println!("{:#?}", response_json);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
@@ -231,5 +238,39 @@ impl Inference for AnthropicInference {
             stop_sequence: anthropic_response.stop_sequence,
             total_tokens: anthropic_response.usage.output_tokens + anthropic_response.usage.input_tokens,
         })
+    }
+
+    async fn get_token_count(&self, messages: Vec<CommonMessage>, _system_message: Option<&str>) -> Result<u64, InferenceError> {
+        if self.api_key.is_empty() {
+            return Err(InferenceError::MissingApiKey("Anthropic API key not found".to_string()));
+        }
+
+        let request = TokenCountRequest {
+            model: &self.model,
+            messages,
+        };
+
+        let response = self.client
+            .post("https://api.anthropic.com/v1/messages/count_tokens")
+            .header("Content-Type", "application/json")
+            .header("X-API-Key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
+
+        let status = response.status();
+        let response_text = response.text().await
+            .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
+
+        if !status.is_success() {
+            return Err(InferenceError::ApiError(status, response_text));
+        }
+
+        let token_count: TokenCountResponse = serde_json::from_str(&response_text)
+            .map_err(|e| InferenceError::InvalidResponse(e.to_string()))?;
+
+        Ok(token_count.token_count)
     }
 }

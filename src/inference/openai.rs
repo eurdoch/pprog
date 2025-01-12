@@ -316,8 +316,32 @@ impl Inference for OpenAIInference {
             message_type: "text".to_string(),
             stop_reason: openai_response.choices[0].finish_reason.clone(),
             stop_sequence: None,
-            output_tokens: 0,
+            total_tokens: 0, // OpenAI doesn't provide token count in response
         };
         Ok(model_response)
+    }
+
+    async fn get_token_count(&self, messages: Vec<CommonMessage>, _system_message: Option<&str>) -> Result<u64, InferenceError> {
+        // OpenAI doesn't have a dedicated token counting endpoint, so we'll return a rough estimate
+        // This is a placeholder implementation
+        let mut total_tokens = 0;
+        for message in messages {
+            for content in message.content {
+                match content {
+                    ContentItem::Text { text } => {
+                        // Rough estimate: 4 characters per token
+                        total_tokens += (text.len() as u64 + 3) / 4;
+                    },
+                    ContentItem::ToolUse { input, .. } => {
+                        // Add rough estimate for tool use
+                        total_tokens += (input.to_string().len() as u64 + 3) / 4;
+                    },
+                    ContentItem::ToolResult { content, .. } => {
+                        total_tokens += (content.len() as u64 + 3) / 4;
+                    }
+                }
+            }
+        }
+        Ok(total_tokens)
     }
 }
