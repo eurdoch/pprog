@@ -77,16 +77,45 @@ impl Chat {
         }
     }
 
+    async fn prune_messages(&mut self) -> Result<(), anyhow::Error> {
+        let system_message = self.get_system_message()?;
+        
+        while !self.messages.is_empty() {
+            let token_count = self.inference.get_token_count(self.messages.clone(), Some(&system_message)).await?;
+            
+            if token_count <= self.max_tokens as u64 {
+                break;
+            }
+            
+            // Remove the oldest non-system message
+            // Find the first non-system message
+            if let Some(index) = self.messages.iter()
+                .position(|msg| msg.role != Role::System) {
+                self.messages.remove(index);
+            } else {
+                // If no non-system messages found, break to avoid infinite loop
+                break;
+            }
+        }
+        Ok(())
+    }
+
     pub async fn handle_message(&mut self, message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
         self.messages.push(message.clone());
+        
+        // After first message, check and prune if needed
+        if self.messages.len() > 1 {
+            self.prune_messages().await?;
+        }
+        
         let return_msg = self.send_messages().await?;
         self.messages.push(return_msg.clone());
         Ok(return_msg)
     }
 
-    pub async fn send_messages(&mut self) -> Result<CommonMessage, anyhow::Error> {
+    fn get_system_message(&self) -> Result<String, anyhow::Error> {
         let tree_string = GitTree::get_tree()?;
-        let system_message = format!(
+        Ok(format!(
             r#"
             You are a coding assistant working on a project.
             
@@ -103,7 +132,11 @@ impl Chat {
             The user may also general questions and in that case simply answer but do not execute any tools.
             "#,
             &tree_string,
-        );
+        ))
+    }
+
+    pub async fn send_messages(&mut self) -> Result<CommonMessage, anyhow::Error> {
+        let system_message = self.get_system_message()?;
         
         match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
             Ok(response) => {
@@ -120,7 +153,6 @@ impl Chat {
         }
     }
 
-
     pub fn get_messages(&self) -> Vec<CommonMessage> {
         self.messages.clone()
     }
@@ -129,4 +161,3 @@ impl Chat {
         self.messages.clear();
     }
 }
-
