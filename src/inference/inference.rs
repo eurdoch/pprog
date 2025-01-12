@@ -13,4 +13,10 @@ pub trait Inference: Send + Sync {
         messages: Vec<CommonMessage>, 
         system_message: Option<&str>
     ) -> Result<ModelResponse, InferenceError>;
+
+    async fn get_token_count(
+        &self, 
+        messages: Vec<CommonMessage>, 
+        system_message: Option<&str>
+    ) -> Result<u64, InferenceError>;
 }
