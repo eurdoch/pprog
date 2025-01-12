@@ -229,7 +229,7 @@ impl Inference for AnthropicInference {
             message_type: "text".to_string(),
             stop_reason: anthropic_response.stop_reason,
             stop_sequence: anthropic_response.stop_sequence,
-            output_tokens: anthropic_response.usage.output_tokens,
+            total_tokens: anthropic_response.usage.output_tokens + anthropic_response.usage.input_tokens,
         })
     }
 }

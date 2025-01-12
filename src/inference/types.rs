@@ -13,7 +13,7 @@ pub struct ModelResponse {
     pub message_type: String,
     pub stop_reason: String,
     pub stop_sequence: Option<String>,
-    pub output_tokens: u64,
+    pub total_tokens: u64,
 }
 
 impl ModelResponse {

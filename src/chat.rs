@@ -107,7 +107,7 @@ impl Chat {
         
         match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
             Ok(response) => {
-                self.total_tokens += response.output_tokens;
+                self.total_tokens = response.total_tokens;
                 let new_msg = CommonMessage {
                     role: Role::Assistant,
                     content: response.content.clone()
