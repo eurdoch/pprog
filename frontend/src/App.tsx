@@ -197,6 +197,10 @@ const App: React.FC = () => {
       }
     };
 
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+
     fetchMessages();
   }, []);
 
