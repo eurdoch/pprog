@@ -311,7 +311,6 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error(error);
       alert(error);
-      setMessages(prev => prev.slice(0, -1));
       setIsProcessing(false);
     } finally {
       // Decrement recursive call count
