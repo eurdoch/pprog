@@ -132,12 +132,20 @@ struct AnthropicRequest<'a> {
 
 #[derive(Debug, Deserialize)]
 struct AnthropicResponse {
-    id: String,
     model: String,
     role: String,
     content: Vec<ContentItem>,
     stop_reason: String,
     stop_sequence: Option<String>,
+    usage: Usage,
+}
+
+#[derive(Debug, Deserialize)]
+struct Usage {
+    cache_creation_input_tokens: u64,
+    cache_read_input_tokens: u64,
+    input_tokens: u64,
+    output_tokens: u64,
 }
 
 pub struct AnthropicInference {
@@ -205,7 +213,7 @@ impl Inference for AnthropicInference {
         let response_text = response.text().await
             .map_err(|e| InferenceError::NetworkError(e.to_string()))?;
         let response_json: serde_json::Value = serde_json::from_str(&response_text).unwrap();
-        log::info!("{:#?}", response_json);
+        println!("{:#?}", response_json);
 
         if !status.is_success() {
             return Err(InferenceError::ApiError(status, response_text));
@@ -221,6 +229,7 @@ impl Inference for AnthropicInference {
             message_type: "text".to_string(),
             stop_reason: anthropic_response.stop_reason,
             stop_sequence: anthropic_response.stop_sequence,
+            output_tokens: anthropic_response.usage.output_tokens,
         })
     }
 }

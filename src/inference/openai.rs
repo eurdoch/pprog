@@ -316,6 +316,7 @@ impl Inference for OpenAIInference {
             message_type: "text".to_string(),
             stop_reason: openai_response.choices[0].finish_reason.clone(),
             stop_sequence: None,
+            output_tokens: 0,
         };
         Ok(model_response)
     }

@@ -2,8 +2,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
 
-use crate::inference::{DeepSeekInference, OpenAIInference};
-use crate::{config::ProjectConfig, inference::AnthropicInference, tree::GitTree};
+use crate::inference::{AnthropicInference, OpenAIInference};
+use crate::{config::ProjectConfig, tree::GitTree};
 use crate::inference::inference::Inference;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -24,14 +24,6 @@ pub enum ContentItem {
         tool_use_id: String,
         content: String,
     },
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct Usage {
-    cache_creation_input_tokens: Number,
-    cache_read_input_tokens: Number,
-    input_tokens: Number,
-    output_tokens: Number,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -74,7 +66,6 @@ impl Chat {
         let inference: Box<dyn Inference> = match config.provider.as_str() {
             "anthropic" => Box::new(AnthropicInference::new()),
             "openai" => Box::new(OpenAIInference::new()),
-            "deepseek" => Box::new(DeepSeekInference::new()),
             _ => Box::new(AnthropicInference::new()),
         };
 

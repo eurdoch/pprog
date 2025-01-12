@@ -13,6 +13,7 @@ pub struct ModelResponse {
     pub message_type: String,
     pub stop_reason: String,
     pub stop_sequence: Option<String>,
+    pub output_tokens: u64,
 }
 
 impl ModelResponse {
@@ -51,6 +52,10 @@ impl ModelResponse {
             .and_then(|v| v.as_str())
             .map(String::from);
 
+        let output_tokens = value.get("output_tokens")
+                .and_then(|v| v.as_str().map(|s| s.parse::<u64>().ok()).flatten())
+                .unwrap_or(0);
+
         Ok(ModelResponse {
             content,
             model,
@@ -58,6 +63,7 @@ impl ModelResponse {
             message_type,
             stop_reason,
             stop_sequence,
+            output_tokens,
         })
     }
 }

@@ -23,6 +23,8 @@ check_cmd = "timeout 3s node index.js" # On Macs use gtimeout
 max_context = 100000
 max_output_tokens = 8096
 
+# Deepseek via OpenAI endpoint
+provider = "openai"
 model = "deepseek-chat"
 check_cmd = "timeout 3s node index.js" # On Macs use gtimeout
 api_url = "https://api.deepseek.com/v1/chat/completions"
