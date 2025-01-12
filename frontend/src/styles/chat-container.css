@@ -40,9 +40,9 @@
 }
 
 .message {
-  max-width: 80%;
-  margin-bottom: 16px;
+  max-width: 70%;
   padding: 12px 18px;
+  margin-bottom: 10px;
   border-radius: 16px;
   word-wrap: break-word;
   white-space: pre-wrap;
@@ -54,6 +54,7 @@
               box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   animation: messageAppear 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
+
 
 .message:hover {
   transform: translateY(-2px) scale(1.01);
@@ -88,7 +89,7 @@
   min-width: 200px;
   flex-shrink: 0;
   width: fit-content;
-  max-width: 90%;
+  max-width: 50%;
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
   color: white;
   font-style: italic;
@@ -98,7 +99,6 @@
     inset 0 1px rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 14px 24px;
-  margin: 20px 0;
   position: relative;
   overflow: hidden;
   transform: translateY(0);

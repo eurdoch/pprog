@@ -361,12 +361,16 @@ const App: React.FC = () => {
             return message.content.map((contentItem, contentIndex) => {
               switch (contentItem.type) {
                 case "text":
-                  return <div
-                    key={`${index}-${contentIndex}`}
-                    className={`message ${message.role === "user" ? "user-msg" : "bot-msg"}`}
-                  >
-                    {renderTextWithCodeBlocks(contentItem.text)}
-                  </div>
+                  if (contentItem.text !== "") {
+                    return <div
+                      key={`${index}-${contentIndex}`}
+                      className={`message ${message.role === "user" ? "user-msg" : "bot-msg"}`}
+                    >
+                      {renderTextWithCodeBlocks(contentItem.text)}
+                    </div>
+                  } else {
+                    return null;
+                  }
                 case "tool_use":
                   return <div
                     key={`${index}-${contentIndex}`}
@@ -381,7 +385,6 @@ const App: React.FC = () => {
         })}
         <div ref={messagesEndRef} />
       </div>
-
       {showFab && (
         <button 
           className="fab"
