@@ -57,7 +57,6 @@ pub struct Chat {
     pub messages: Vec<CommonMessage>,
     inference: Box<dyn Inference>,
     max_tokens: usize,
-    total_tokens: u64,
 }
 
 impl Chat {
@@ -73,7 +72,6 @@ impl Chat {
             messages: Vec::new(),
             inference,
             max_tokens: config.max_context,
-            total_tokens: 0,
         }
     }
 
@@ -146,7 +144,6 @@ impl Chat {
         
         match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
             Ok(response) => {
-                self.total_tokens = response.total_tokens;
                 let new_msg = CommonMessage {
                     role: Role::Assistant,
                     content: response.content.clone()
