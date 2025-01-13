@@ -49,7 +49,7 @@ To run enter
 ```
 pprog serve
 ```
-and then enter `http://localhost:8080` in your browser.  A chat interface will load and you can begin making changes to your code.  For example, in this example project you can type in a message like `Create an index.js file with basic express server` and it will create file and check that it runs properly by using `check_cmd` command.  Then another message like `Add GET /ping endpoint` and it will make changes to the code and check again.  You may also questions about the code.  
+and then enter `http://localhost:8080` in your browser.  A chat interface will load and you can begin making changes to your code.  For example, in this example project you can type in a message like `Create an index.js file with basic express server` and it will create file and check that it runs properly by using `check_cmd` command.  Then another message like `Add GET /ping endpoint` and it will make changes to the code and check again.  You may also ask questions about the code.  
 
 You can run `pprog serve` for multiple projects at the same time by assigning different ports
 ```
@@ -64,6 +64,11 @@ write_file - replace entire file with contents
 execute - run general bash, sometimes used by agent to install packages when check fails
 compile_check - check for compilation errors, or for interpreted programs checks runtime errors on startup
 ```
+
+# message pruning
+When messages go beyond the `max_context` config amount messages will be pruned until total token count is below max.  When using Anthropic models, dedicated endpoint at `v1/messages/count_tokens` is used to get count.  For OpenAI/OpenAI-compatible models a conservative estimate of 2 characters / token is used to get count.  This is because different providers may use different tokenizers behind their OpenAI-compatible API.  The conversative estimate is also because most of the text will be code which has a lower character / token ratio on average.  As a general rule of thumb you should set your `max_context` to about 70% of context length of model.  
+
+If errors occur while the chat is in a tool loop, all tool use and tool result messages following the user request will be pruned and a single empty assistant message will be added to maintain a valid conversation format.  The error will be then be forwarded to user.  This is quick hack and will probably change in the future, but is required by contraints of most APIs.
 
 # tips and warnings
 - The system prompt includes instructions to not change any files outside of the root of the project but this is not strictly guaranteed.  It has not gone outside the root of a project once, but if you prompt it to it possibly could.
