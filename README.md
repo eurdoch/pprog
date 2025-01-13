@@ -41,7 +41,7 @@ provider = "openai"
 model = "gpt-4o"
 check_cmd = "timeout 3s node index.js"
 api_url = "https://api.openai.com/v1/chat/completions"
-api_key = "<OEPNAI API KEY>"
+api_key = "<OPENAI API KEY>"
 max_context = 100000
 max_output_tokens = 8096
 ```
