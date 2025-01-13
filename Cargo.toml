@@ -57,3 +57,7 @@ tempfile = "3.8"
 [[bin]]
 name = "pprog"
 path = "src/main.rs"
+
+[package.metadata.binstall]
+pkg-url = "https://github.com/foomprep/pprog/releases/download/v{ version }/pprog-{ target }{ archive-suffix }"
+bin-dir = "pprog-{ target }"
