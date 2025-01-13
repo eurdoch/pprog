@@ -70,6 +70,13 @@ When messages go beyond the `max_context` config amount messages will be pruned 
 
 If errors occur while the chat is in a tool loop, all tool use and tool result messages following the user request will be pruned and a single empty assistant message will be added to maintain a valid conversation format.  The error will be then be forwarded to user.  This is quick hack and will probably change in the future, but is required by constraints of most APIs.
 
+# officially supported models
+- Anthropic models: sonnet-3-5, haiku-3-5
+- OpenAI models: gpt-4, gpt-4o, gpt-4o-mini
+- Deepseek: DeepSeek v3 (through OpenAI compatible API)
+
+o1 models are not currently supported as they do not support tool use.  support will be added when tools are supported.
+
 # tips and warnings
 - The system prompt includes instructions to not change any files outside of the root of the project but this is not strictly guaranteed.  It has not gone outside the root of a project once, but if you prompt it to it possibly could.
 - If using Anthropic/OpenAI models it can get expensive, but is usually very effective.  When using Sonnet 3.5 a single code change request routinely cost 0.20 USD or more.  This is because the program is constantly reading/writing entire files to satisfy each request.  I shudder to use Opus and haven't even tried.  Haiku 3.5 seems to be a good trade-off, usually costing a few cents per change of a medium sized project.  I normally use Haiku.  DeepSeek V3 is dirt cheap and can be effective but less so, usually requires multiple attempts where Sonnet will one-shot it.  OpenAI models can be effective, usually gpt-4o-mini as gpt-4o gets throttled on rate limits almost immediately unless you can raise them.
