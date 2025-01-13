@@ -71,7 +71,7 @@ impl ProjectConfig {
             let package_json = std::fs::read_to_string(root_path.join("package.json")).unwrap_or_default();
             let package_data: serde_json::Value = serde_json::from_str(&package_json).unwrap_or_default();
             if let Some(main) = package_data.get("main").and_then(|v| v.as_str().map(String::from)) {
-                return format!("node {}", main);
+                return format!("timeout 3s node {}", main);
             }
         }
 
