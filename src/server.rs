@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpResponse, HttpServer, Responder, get, HttpRequest, post};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder, get, HttpRequest};
 use actix_cors::Cors;
 use handlebars::Handlebars;
 use include_dir::{include_dir, Dir};

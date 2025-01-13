@@ -134,6 +134,8 @@ struct AnthropicRequest<'a> {
 struct TokenCountRequest<'a> {
     model: &'a str,
     messages: Vec<CommonMessage>,
+    tools: serde_json::Value,
+    system: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -240,14 +242,21 @@ impl Inference for AnthropicInference {
         })
     }
 
-    async fn get_token_count(&self, messages: Vec<CommonMessage>, _system_message: Option<&str>) -> Result<u64, InferenceError> {
+    async fn get_token_count(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<u64, InferenceError> {
         if self.api_key.is_empty() {
             return Err(InferenceError::MissingApiKey("Anthropic API key not found".to_string()));
         }
 
+        let system = system_message.unwrap_or("").to_string();
+
+        let tools = self.tools.get_tools_json()
+            .map_err(|e| InferenceError::SerializationError(e.to_string()))?;
+
         let request = TokenCountRequest {
             model: &self.model,
             messages,
+            tools,
+            system,
         };
 
         let response = self.client
