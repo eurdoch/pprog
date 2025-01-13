@@ -27,7 +27,7 @@ This will generate a config file `pprog.toml` with sensible defaults depending o
 ```
 provider = "anthropic"
 model = "claude-3-5-haiku-latest"
-check_cmd = "node index.js"
+check_cmd = "timeout 3s node index.js"
 api_url = "https://api.anthropic.com/v1/messages"
 api_key = "..." // if ANTHROPIC_API_KEY env var is set then it will automatically add it
 max_context = 128000
@@ -37,7 +37,7 @@ The program that generates and edits code in the backend uses the `check_cmd` to
 ```
 provider = "openai"
 model = "gpt-4o"
-check_cmd = "node index.js"
+check_cmd = "timeout 3s node index.js"
 api_url = "https://api.openai.com/v1/chat/completions"
 api_key = "<OEPNAI API KEY>"
 max_context = 100000
