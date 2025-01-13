@@ -140,7 +140,7 @@ struct TokenCountRequest<'a> {
 
 #[derive(Debug, Deserialize)]
 struct TokenCountResponse {
-    token_count: u64,
+    input_tokens: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -277,9 +277,9 @@ impl Inference for AnthropicInference {
             return Err(InferenceError::ApiError(status, response_text));
         }
 
-        let token_count: TokenCountResponse = serde_json::from_str(&response_text)
+        let token_count_response: TokenCountResponse = serde_json::from_str(&response_text)
             .map_err(|e| InferenceError::InvalidResponse(e.to_string()))?;
 
-        Ok(token_count.token_count)
+        Ok(token_count_response.input_tokens)
     }
 }

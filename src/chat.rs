@@ -102,7 +102,6 @@ impl Chat {
 
     pub async fn handle_message(&mut self, message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
         self.messages.push(message.clone());
-        println!("{:#?}", self.messages.clone());
         
         // After first message, check and prune if needed
         if self.messages.len() > 1 {
