@@ -27,7 +27,7 @@ interface ToolResult {
 }
 
 interface Message {
-  role: "user" | "assistant",
+  role: "user" | "assistant | tool",
   content: (Text | ToolUse | ToolResult)[],
 }
 
