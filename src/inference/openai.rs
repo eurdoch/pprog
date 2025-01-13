@@ -320,27 +320,39 @@ impl Inference for OpenAIInference {
         Ok(model_response)
     }
 
-    async fn get_token_count(&self, messages: Vec<CommonMessage>, _system_message: Option<&str>) -> Result<u64, InferenceError> {
-        // OpenAI doesn't have a dedicated token counting endpoint, so we'll return a rough estimate
-        // This is a placeholder implementation
+    async fn get_token_count(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<u64, InferenceError> {
         let mut total_tokens = 0;
+        if let Some(system_message) = system_message {
+            total_tokens += (system_message.len() as u64 + 1) / 2;
+        }
         for message in messages {
             for content in message.content {
                 match content {
                     ContentItem::Text { text } => {
-                        // Rough estimate: 4 characters per token
-                        total_tokens += (text.len() as u64 + 3) / 4;
+                        total_tokens += (text.len() as u64 + 1) / 2;
                     },
                     ContentItem::ToolUse { input, .. } => {
-                        // Add rough estimate for tool use
-                        total_tokens += (input.to_string().len() as u64 + 3) / 4;
+                        total_tokens += (input.to_string().len() as u64 + 1) / 2;
                     },
                     ContentItem::ToolResult { content, .. } => {
-                        total_tokens += (content.len() as u64 + 3) / 4;
+                        total_tokens += (content.len() as u64 + 1) / 2;
                     }
                 }
             }
         }
+        let tool_token_count: u64 = self.tool_provider.tools.iter().map(|tool| {
+            let tool_name_tokens = (tool.function.name.len() as u64 + 1) / 2;
+            let tool_description_tokens = (tool.function.description.len() as u64 + 1) / 2;
+            let mut param_tokens = 0;
+            for (_, prop) in tool.function.parameters.properties.iter() {
+                param_tokens += (prop.property_type.len() as u64 + 1) / 2;
+                param_tokens += (prop.description.len() as u64 + 1) / 2;
+            }
+            tool_name_tokens + tool_description_tokens + param_tokens
+        }).sum();
+        total_tokens += tool_token_count;
         Ok(total_tokens)
     }
+
 }
+
