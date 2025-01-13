@@ -29,7 +29,7 @@ provider = "anthropic"
 model = "claude-3-5-haiku-latest"
 check_cmd = "timeout 3s node index.js"
 api_url = "https://api.anthropic.com/v1/messages"
-api_key = "..." // if ANTHROPIC_API_KEY env var is set then it will automatically add it
+api_key = "<ANTHROPIC API KEY>"
 max_context = 128000
 max_output_tokens = 8096
 ```
