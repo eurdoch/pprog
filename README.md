@@ -33,7 +33,9 @@ api_key = "..." // if ANTHROPIC_API_KEY env var is set then it will automaticall
 max_context = 128000
 max_output_tokens = 8096
 ```
-The program that generates and edits code in the backend uses the `check_cmd` to check compilation or successful operation.  In this case `node index.js` will be run to check for any errors in code changes and then loop to fix these changes if they exist.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  An Anthropic account is assumed on init, but OpenAI-compatible APIs can be used as well.  For example, to use OpenAI you can change config to 
+The program that generates and edits code in the backend uses the `check_cmd` to check compilation or successful operation.  In this case `timeout 3s node index.js` will be run to check for any errors and if they exist new changes will be made to correct them until all errors are gone.  You're free to change `check_cmd` to anything you want for the given program.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  For intepreted languages it will depend on the type of program.  For long lived programs like a web server, you can use the timeout trick above (`gtimeout` on Macbooks) to check for any initial runtime errors.  For intepreted programs that are not long lived simply running the program (like `node short-lived-script.js`) should work.  Note that if not using a timeout for interpreted programs, the chat will not continue until the program completes.
+
+An Anthropic account is assumed on init, but OpenAI-compatible APIs can be used as well.  For example, to use OpenAI you can change config to 
 ```
 provider = "openai"
 model = "gpt-4o"
