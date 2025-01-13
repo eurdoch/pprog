@@ -43,6 +43,7 @@ api_key = "<OEPNAI API KEY>"
 max_context = 100000
 max_output_tokens = 8096
 ```
+To run enter
 ```
 pprog serve
 ```
