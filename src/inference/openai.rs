@@ -211,7 +211,6 @@ impl Inference for OpenAIInference {
     }
 
     async fn query_model(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
-
         let mut openai_messages: Vec<OpenAIMessage> = messages.into_iter().map(|msg| {
             let mut openai_message = OpenAIMessage {
                 role: msg.role,
@@ -245,12 +244,24 @@ impl Inference for OpenAIInference {
         }).collect();
 
         if let Some(sys_msg) = system_message {
-            openai_messages.insert(0, OpenAIMessage {
-                role: Role::System,
-                content: Some(OpenAIContent::String(sys_msg.to_string())),
-                tool_calls: None,
-                tool_call_id: None,
-            });
+            match self.model.as_str() {
+                "o1" | "o1-mini" => {
+                    openai_messages.insert(0, OpenAIMessage {
+                        role: Role::Developer,
+                        content: Some(OpenAIContent::String(sys_msg.to_string())),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    });
+                },
+                _ => {
+                    openai_messages.insert(0, OpenAIMessage {
+                        role: Role::System,
+                        content: Some(OpenAIContent::String(sys_msg.to_string())),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    });
+                },
+            };
         }
 
         let tools = self.tool_provider.get_tools_json()
