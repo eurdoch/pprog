@@ -14,6 +14,14 @@ use super::inference::Inference;
 struct OpenAIRequest {
     model: String,
     messages: Vec<OpenAIMessage>,
+    max_completion_tokens: Option<u32>,
+    tools: Option<serde_json::Value>,
+}
+
+#[derive(Serialize)]
+struct LegacyOpenAIRequest {
+    model: String,
+    messages: Vec<OpenAIMessage>,
     max_tokens: Option<u32>,
     tools: Option<serde_json::Value>,
 }
@@ -267,11 +275,19 @@ impl Inference for OpenAIInference {
         let tools = self.tool_provider.get_tools_json()
             .map_err(|e| InferenceError::SerializationError(e.to_string())).ok();
 
-        let request = OpenAIRequest {
-            model: self.model.clone(),
-            messages: openai_messages,
-            max_tokens: Some(self.max_output_tokens),
-            tools,
+        let request: serde_json::Value = match self.model.as_str() {
+            "o1" | "o1-mini" => serde_json::to_value(OpenAIRequest {
+                model: self.model.clone(),
+                messages: openai_messages,
+                max_completion_tokens: Some(self.max_output_tokens),
+                tools,
+            }).unwrap(),
+            _ => serde_json::to_value(LegacyOpenAIRequest {
+                model: self.model.clone(),
+                messages: openai_messages,
+                max_tokens: Some(self.max_output_tokens),
+                tools,
+            }).unwrap()
         };
 
         let response = self.client
