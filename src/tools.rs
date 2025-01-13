@@ -21,12 +21,7 @@ impl Tools {
             .arg(statement)
             .output()?;
 
-        if output.status.success() {
-            Ok(String::from_utf8(output.stdout)?)
-        } else {
-            let error = String::from_utf8_lossy(&output.stderr).to_string();
-            Err(anyhow::Error::msg(error))
-        }
+        Ok(String::from_utf8(output.stdout)? + &String::from_utf8(output.stderr)?)
     }
 
     fn compile_check() -> Result<String, anyhow::Error> {
@@ -37,11 +32,7 @@ impl Tools {
             .arg(config.check_cmd)
             .output()?;
 
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
-        } else {
-            Ok(String::from_utf8_lossy(&output.stderr).to_string())
-        }
+        Ok(String::from_utf8(output.stdout)? + &String::from_utf8(output.stderr)?)
     }
 
     pub fn handle_tool_use(name: &String, inputs: &serde_json::Value) -> Result<String, anyhow::Error> {
@@ -76,7 +67,13 @@ impl Tools {
                 Tools::execute(statement)
             },
             "compile_check" => {
-                Tools::compile_check()
+                match Tools::compile_check() {
+                    Ok(output) => {
+                        println!("compile output: {}", &output);
+                        return Ok(output);
+                    },
+                    Err(e) => return Err(anyhow::Error::msg(format!("Error doing compile check: {}", e.to_string()))),
+                };
             },
             _ => Err(anyhow::Error::msg(format!("Invalid tool name: {}", name))),
         }

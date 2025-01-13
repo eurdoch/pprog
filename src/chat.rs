@@ -102,7 +102,6 @@ impl Chat {
 
     pub async fn handle_message(&mut self, message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
         self.messages.push(message.clone());
-        println!("{:#?}", self.messages.clone());
         
         // After first message, check and prune if needed
         if self.messages.len() > 1 {
@@ -111,7 +110,6 @@ impl Chat {
         
         let return_msg = self.send_messages().await?;
         self.messages.push(return_msg.clone());
-        println!("{:#?}", self.messages.clone());
         Ok(return_msg)
     }
 
@@ -148,7 +146,6 @@ impl Chat {
         
         match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
             Ok(response) => {
-                println!("{:#?}", response);
                 self.total_tokens = response.total_tokens;
                 let new_msg = CommonMessage {
                     role: Role::Assistant,

@@ -134,10 +134,12 @@ async fn tool_handler(
     req: web::Json<ToolRequest>
 ) -> impl Responder {
     match Tools::handle_tool_use(&req.name, &req.input) {
-        Ok(tool_result) => HttpResponse::Ok().json(ToolResponse {
-            tool_use_id: req.0.id,
-            content: tool_result,
-        }),
+        Ok(tool_result) => {
+            HttpResponse::Ok().json(ToolResponse {
+                tool_use_id: req.0.id,
+                content: tool_result,
+            })
+        },
         Err(e) => HttpResponse::InternalServerError().json(ErrorResponse {
             error: e.to_string(),
         })
