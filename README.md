@@ -14,6 +14,10 @@ To install Rust, go to their [website](https://www.rust-lang.org/).
 ```
 cargo install pprog
 ```
+Prebuilt binaries can also be installed directly on Linux and Mac
+```
+cargo binstall pprog
+```
 
 ## usage
 To use `pprog`, `cd` into the directory of an existing or template project.  `pprog` depends on `git` and also uses `.gitignore` to communicate the available files to LLM, so the project must have `git` initialized. For this example, we'll create a basic NodeJS project.
