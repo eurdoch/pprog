@@ -15,14 +15,6 @@ api_key = "<ANTHROPIC API KEY>"
 max_context = 128000
 max_output_tokens = 8096
 
-# Using bedrock requires that AWS credentials and config are setup in ~/.aws/credentials and ~/.aws/config respectively
-# Not currently working
-#provider = "bedrock"
-#model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
-#check_cmd = "timeout 3s node index.js" # On Macs use gtimeout
-#max_context = 100000
-#max_output_tokens = 8096
-
 # Deepseek via OpenAI endpoint
 provider = "openai"
 model = "deepseek-chat"
