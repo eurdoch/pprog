@@ -129,7 +129,7 @@ impl Chat {
             Never make any changes outside of the project's root directory.
             Always read and write entire file contents.  Never write partial contents of a file.
 
-            The user may also general questions and in that case simply answer but do not execute any tools.
+            The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question.
             "#,
             &tree_string,
         ))
