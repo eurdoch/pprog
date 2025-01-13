@@ -102,6 +102,7 @@ impl Chat {
 
     pub async fn handle_message(&mut self, message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
         self.messages.push(message.clone());
+        println!("{:#?}", self.messages.clone());
         
         // After first message, check and prune if needed
         if self.messages.len() > 1 {
@@ -136,6 +137,12 @@ impl Chat {
         ))
     }
 
+    fn is_simple_user_text_message(msg: &CommonMessage) -> bool {
+        msg.role == Role::User && 
+        msg.content.len() == 1 && 
+        matches!(msg.content[0], ContentItem::Text { text: _ })
+    }
+
     pub async fn send_messages(&mut self) -> Result<CommonMessage, anyhow::Error> {
         let system_message = self.get_system_message()?;
         
@@ -150,7 +157,30 @@ impl Chat {
                 Ok(new_msg)
             },
             Err(e) => {
-                Err(anyhow::anyhow!("Inference Error: {}", e))
+                // When error occurs, remove messages until we find a simple user text message
+                while !self.messages.is_empty() {
+                    if let Some(last_msg) = self.messages.last() {
+                        if Self::is_simple_user_text_message(last_msg) {
+                            break;
+                        }
+                    }
+                    self.messages.pop();
+                }
+                
+                // If we emptied the vector or didn't find a simple user message, return the error
+                if self.messages.is_empty() || !Self::is_simple_user_text_message(self.messages.last().unwrap()) {
+                    return Err(anyhow::anyhow!("Inference Error: {}. Failed to find valid recovery point.", e));
+                }
+                
+                // Add an empty assistant message
+                self.messages.push(CommonMessage {
+                    role: Role::Assistant,
+                    content: vec![ContentItem::Text {
+                        text: String::new()
+                    }]
+                });
+                
+                Err(anyhow::anyhow!("Inference Error: {}. Recovered to last simple user message and added empty assistant response.", e))
             }
         }
     }

@@ -204,10 +204,6 @@ const App: React.FC = () => {
     fetchMessages();
   }, []);
 
-  useEffect(() => {
-    console.log(messages);
-  }, [messages]);
-
   const handleDiffCheck = () => {
     setShowModal(true);
   };

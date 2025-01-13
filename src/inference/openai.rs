@@ -3,7 +3,6 @@ use reqwest::Client;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
 use async_trait::async_trait;
-use serde_json::Value;
 
 use crate::chat::{CommonMessage, ContentItem, Role};
 use crate::config::ProjectConfig;
