@@ -1,7 +1,7 @@
 # p(air) prog(rammer)
 pprog is an LLM based pair programmer for working on coding projects.  it can generate, edit and answer questions about your code.
 
-This is experimental and unstable code, it may change at any time.  It has solid support for Claude models through the Anthropic API, as well as OpenAI.  Still working on support for o1 as the lack of system prompt makes it more difficult to implement.  The program should work with any OpenAI compatible API by assigning corresponding api url in config.  Some examples of different configs can be found in `examples` directory.  The tooling logic is intended to be as simple as possible so the model has more flexibility to maneuver.  I am always open to suggestions!
+This is experimental and unstable code, it may change at any time.  It has solid support for Claude models through the Anthropic API, as well as OpenAI.  Still working on support for o1 as the lack of system prompt makes it more difficult to implement.  The program should work with any OpenAI compatible API by assigning corresponding api url in config.  Some examples of different configs can be found in `examples` directory.  The tooling logic is intended to be as simple as possible so the model has more flexibility to maneuver.  I am always open to suggestions.  I created this project for personal use because I didn't want to be locked in to a specific editor.
 
 ## prereqs
 - rust
