@@ -8,6 +8,9 @@ use crate::tree::GitTree;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectConfig {
     pub model: String,
+    #[serde(default)]
+    pub check_enabled: bool,
+    #[serde(default)]
     pub check_cmd: String,
     #[serde(default)]
     pub api_url: String,
@@ -26,6 +29,7 @@ impl Default for ProjectConfig {
         ProjectConfig {
             model: String::from("claude-3-5-haiku-latest"),
             check_cmd: String::new(),
+            check_enabled: false,
             api_url: String::from("https://api.anthropic.com/v1/messages"),
             api_key: String::new(),
             max_context: 100000,
@@ -131,6 +135,7 @@ impl ProjectConfig {
         let config = ProjectConfig {
             model: String::from("claude-3-5-haiku-latest"),
             check_cmd,
+            check_enabled: false,
             api_url: String::from("https://api.anthropic.com/v1/messages"),
             api_key,
             max_context: 100000,

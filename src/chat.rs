@@ -57,6 +57,7 @@ pub struct Chat {
     pub messages: Vec<CommonMessage>,
     inference: Box<dyn Inference>,
     max_tokens: usize,
+    check_enabled: bool,
 }
 
 impl Chat {
@@ -72,6 +73,7 @@ impl Chat {
             messages: Vec::new(),
             inference,
             max_tokens: config.max_context,
+            check_enabled: config.check_enabled,
         }
     }
 
@@ -113,24 +115,45 @@ impl Chat {
 
     fn get_system_message(&self) -> Result<String, anyhow::Error> {
         let tree_string = GitTree::get_tree()?;
-        Ok(format!(
-            r#"
-            You are a coding assistant working on a project.
-            
-            File tree structure:
-            {}
+        if self.check_enabled {
+            Ok(format!(
+                r#"
+                You are a coding assistant working on a project.
+                
+                File tree structure:
+                {}
 
-            The user will give you instructions on how to change the project code.
+                The user will give you instructions on how to change the project code.
 
-            Always call 'compile_check' tool after completing changes that the user requests.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
+                Always call 'compile_check' tool after completing changes that the user requests.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
 
-            Never make any changes outside of the project's root directory.
-            Always read and write entire file contents.  Never write partial contents of a file.
+                Never make any changes outside of the project's root directory.
+                Always read and write entire file contents.  Never write partial contents of a file.
 
-            The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question.
-            "#,
-            &tree_string,
-        ))
+                The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question.
+                "#,
+                &tree_string,
+            ))
+        } else {
+            Ok(format!(
+                r#"
+                You are a coding assistant working on a project.
+                
+                File tree structure:
+                {}
+
+                The user will give you instructions on how to change the project code.
+
+                DO NOT run compile checks.
+                Never make any changes outside of the project's root directory.
+                Always read and write entire file contents.  Never write partial contents of a file.
+
+                The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question.
+                "#,
+                &tree_string
+            ))
+        }
+
     }
 
     fn is_simple_user_text_message(msg: &CommonMessage) -> bool {
