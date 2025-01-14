@@ -131,7 +131,7 @@ impl ProjectConfig {
         let config = ProjectConfig {
             model: String::from("claude-3-5-haiku-latest"),
             check_cmd,
-            api_url: String::from("https://api.anthropic.com/v1"),
+            api_url: String::from("https://api.anthropic.com/v1/messages"),
             api_key,
             max_context: 100000,
             max_output_tokens: 8096,
