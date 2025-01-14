@@ -33,17 +33,19 @@ This will generate a config file `pprog.toml` with sensible defaults depending o
 provider = "anthropic"
 model = "claude-3-5-haiku-latest"
 check_cmd = "timeout 3s node index.js"
+check_enable = false;
 api_url = "https://api.anthropic.com/v1/messages"
 api_key = "<ANTHROPIC API KEY>"
 max_context = 128000
 max_output_tokens = 8096
 ```
-The program that generates and edits code in the backend uses the `check_cmd` to check compilation or successful operation.  In this case `timeout 3s node index.js` will be run to check for any errors and if they exist new changes will be made to correct them until all errors are gone.  You're free to change `check_cmd` to anything you want for the given program.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  For intepreted languages it will depend on the type of program.  For long lived programs like a web server, you can use the timeout trick above (`gtimeout` on Macbooks) to check for any initial runtime errors.  For intepreted programs that are not long lived simply running the program (like `node short-lived-script.js`) should work.  Note that if not using a timeout for interpreted programs, the chat will not continue until the program completes.
+
 
 An Anthropic account is assumed on init, but OpenAI-compatible APIs can be used as well.  For example, to use OpenAI you can change config to 
 ```
 provider = "openai"
 model = "gpt-4o"
+check_enabled = false
 check_cmd = "timeout 3s node index.js"
 api_url = "https://api.openai.com/v1/chat/completions"
 api_key = "<OPENAI API KEY>"
@@ -60,6 +62,15 @@ You can run `pprog serve` for multiple projects at the same time by assigning di
 ```
 pprog serve --port 3002
 ```
+
+# check command
+`pprog` generates and edits code in the backend uses the `check_cmd` to check compilation or successful operation.  In this case `timeout 3s node index.js` will be run to check for any errors and if they exist new changes will be made to correct them until all errors are gone.  You're free to change `check_cmd` to anything you want for the given program.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  For intepreted languages it will depend on the type of program.  For long lived programs like a web server, you can use the timeout trick above (`gtimeout` on Macbooks) to check for any initial runtime errors.  For intepreted programs that are not long lived simply running the program (like `node short-lived-script.js`) should work.  Note that if not using a timeout for interpreted programs, the chat will not continue until the program completes.
+
+Depending on the project a good `check_cmd` can be extremely verbose and therefore costly.  For example, if working a React Native I would use something like
+```
+check_cmd = "gtimeout 10s npx react-native run-android"
+```
+This produces A LOT of text that gets passed into the context of message calls, most of which is not helpful at all.  For this reason check is disabled by default.  Set config variable `check_enabled = true` to enable.
 
 # tools
 `pprog` uses a very small set of tools to make changes.  currently it has four.
