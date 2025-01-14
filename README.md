@@ -11,10 +11,11 @@ This is experimental and unstable code, it may change at any time.  It has solid
 To install Rust, go to their [website](https://www.rust-lang.org/).
 
 ## install
+To build
 ```
 cargo install pprog
 ```
-Prebuilt binaries can also be installed directly on Linux and Mac
+or download binary
 ```
 cargo binstall pprog
 ```
