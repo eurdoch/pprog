@@ -66,11 +66,11 @@ pprog serve --port 3002
 # check command
 `pprog` generates and edits code in the backend uses the `check_cmd` to check compilation or successful operation.  In this case `timeout 3s node index.js` will be run to check for any errors and if they exist new changes will be made to correct them until all errors are gone.  You're free to change `check_cmd` to anything you want for the given program.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  For intepreted languages it will depend on the type of program.  For long lived programs like a web server, you can use the timeout trick above (`gtimeout` on Macbooks) to check for any initial runtime errors.  For intepreted programs that are not long lived simply running the program (like `node short-lived-script.js`) should work.  Note that if not using a timeout for interpreted programs, the chat will not continue until the program completes.
 
-Depending on the project a good `check_cmd` can be extremely verbose and therefore costly.  For example, if working a React Native I would use something like
+Depending on the project, `check_cmd` can be extremely verbose and therefore costly.  For example, if building a React Native I would use something like
 ```
 check_cmd = "gtimeout 10s npx react-native run-android"
 ```
-This produces A LOT of text that gets passed into the context of message calls, most of which is not helpful at all.  For this reason check is disabled by default.  Set config variable `check_enabled = true` to enable.
+This produces A LOT of text that gets passed into the context of message calls, most of which is not helpful at all and usually increases cost of task by 3x or more.  For this reason check is disabled by default.  Set config variable `check_enabled = true` to enable.
 
 # tools
 `pprog` uses a very small set of tools to make changes.  currently it has four.
@@ -82,9 +82,9 @@ compile_check - check for compilation errors, or for interpreted programs checks
 ```
 
 # message pruning
-When messages go beyond the `max_context` config amount messages will be pruned until total token count is below max.  When using Anthropic models, dedicated endpoint at `v1/messages/count_tokens` is used to get count.  For OpenAI/OpenAI-compatible models a conservative estimate of 2 characters / token is used to get count.  This is because different providers may use different tokenizers behind their OpenAI-compatible API.  The conversative estimate is also because most of the text will be code which has a lower character / token ratio on average.  As a general rule of thumb you should set your `max_context` to be around 70% of context length of model.  
+When messages go beyond the `max_context` config amount messages will be pruned automatically until total token count is below max.  When using Anthropic models, dedicated endpoint at `v1/messages/count_tokens` is used to get count.  For OpenAI/OpenAI-compatible models a conservative estimate of 2 characters / token is used to get count.  This is because different providers may use different tokenizers behind their OpenAI-compatible API.  The conversative estimate is also because most of the text will be code which has a lower character / token ratio on average.  As a general rule of thumb you should set your `max_context` to be around 70% of context length of model.  
 
-If errors occur while the chat is in a tool loop, all tool use and tool result messages following the user request will be pruned and a single empty assistant message will be added to maintain a valid conversation format.  The error will be then be forwarded to user.  This is quick hack and will probably change in the future, but is required by constraints of most APIs.
+If errors occur while the chat is in a tool loop, all tool use and tool result messages following the user request will be pruned and a single empty assistant message will be added to maintain a valid conversation format.  The error will then be forwarded to user.  This is a quick hack and will probably change in the future, but is required by constraints of most APIs and how models are trained.  
 
 # officially supported models
 - Anthropic models: sonnet-3-5, haiku-3-5
