@@ -91,7 +91,8 @@ If errors occur while the chat is in a tool loop, all tool use and tool result m
 - OpenAI models: gpt-4, gpt-4o, gpt-4o-mini
 - Deepseek: DeepSeek v3 (through OpenAI compatible API)
 
-o1 models are not currently supported as they do not support tool use.  support will be added when tools are supported.
+o1 models are not currently supported due to API changes by OpenAI, working on a solution at the moment as i'd really like to use it.
+as people will probably ask llama models can be used through OpenAI-compatible APIs like Fireworks, but i've found even 405b to be utterly useless when using it.
 
 # tips and warnings
 - The system prompt includes instructions to not change any files outside of the root of the project but this is not strictly guaranteed.  It has not gone outside the root of a project once, but if you prompt it to it possibly could.
