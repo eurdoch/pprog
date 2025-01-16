@@ -69,7 +69,6 @@ impl Tools {
             "compile_check" => {
                 match Tools::compile_check() {
                     Ok(output) => {
-                        println!("compile output: {}", &output);
                         return Ok(output);
                     },
                     Err(e) => return Err(anyhow::Error::msg(format!("Error doing compile check: {}", e.to_string()))),
