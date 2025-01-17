@@ -33,14 +33,12 @@ This will generate a config file `pprog.toml` with sensible defaults depending o
 provider = "anthropic"
 model = "claude-3-5-haiku-latest"
 check_cmd = "timeout 3s node index.js"
-check_enable = false;
+check_enabled = false
 api_url = "https://api.anthropic.com/v1/messages"
 api_key = "<ANTHROPIC API KEY>"
 max_context = 128000
 max_output_tokens = 8096
 ```
-
-
 An Anthropic account is assumed on init, but OpenAI-compatible APIs can be used as well.  For example, to use OpenAI you can change config to 
 ```
 provider = "openai"
@@ -91,8 +89,8 @@ If errors occur while the chat is in a tool loop, all tool use and tool result m
 - OpenAI models: gpt-4, gpt-4o, gpt-4o-mini
 - Deepseek: DeepSeek v3 (through OpenAI compatible API)
 
-o1 models are not currently supported due to API changes by OpenAI, working on a solution at the moment as i'd really like to use it.
-as people will probably ask llama models can be used through OpenAI-compatible APIs like Fireworks, but i've found even 405b to be utterly useless when using it.
+o1 models are not currently supported due to API changes by OpenAI and lack of tools support, trying to hack a solution at the moment as i'd really like to try it.
+as people will probably ask llama models can be used through OpenAI-compatible APIs like Fireworks, but i've found even 405b to be utterly useless.
 
 # tips and warnings
 - The system prompt includes instructions to not change any files outside of the root of the project but this is not strictly guaranteed.  It has not gone outside the root of a project once, but if you prompt it to it possibly could.
