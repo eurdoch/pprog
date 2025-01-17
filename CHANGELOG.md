@@ -1,3 +1,7 @@
+## [0.0.6] - 2025-01-17
+### Added
+- Config variable to disable compile checks
+
 ## [0.0.5] - 2025-01-12
 ### Added
 - Strips conversation to valid state on API error
