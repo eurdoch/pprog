@@ -1,4 +1,6 @@
+
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 use anyhow::Result;
 
@@ -12,6 +14,11 @@ impl Tools {
     }
 
     fn write_file(path: &str, content: &str) -> Result<()> {
+        if let Some(parent) = Path::new(path).parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
+        }
         Ok(fs::write(path, content)?)
     }
 
