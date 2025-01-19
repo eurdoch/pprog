@@ -193,7 +193,7 @@ impl Chat {
                 self.messages.push(CommonMessage {
                     role: Role::Assistant,
                     content: vec![ContentItem::Text {
-                        text: String::new()
+                        text: "Error, conversation interrupted.".to_string(),
                     }]
                 });
                 
