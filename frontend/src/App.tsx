@@ -267,7 +267,6 @@ const App: React.FC = () => {
       }
 
       const data = await response.json();
-      console.log(data);
 
       setMessages(prev => [
         ...prev,
@@ -309,10 +308,13 @@ const App: React.FC = () => {
             break;
         }
       }
-      await handleSendMessage({
-        role: "user",
-        content: tool_result_content_items
-      });
+      if (tool_result_content_items.length > 0) {
+        await handleSendMessage({
+          role: "user",
+          content: tool_result_content_items
+        });
+      }
+
     } catch (error: any) {
       console.error(error);
       alert(error);
