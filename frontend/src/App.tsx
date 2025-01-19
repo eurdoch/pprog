@@ -278,7 +278,6 @@ const App: React.FC = () => {
           case "text":
             break;
           case "tool_use":
-            console.log('tool use case');
             const response = await fetch(`${window.SERVER_URL}/tools`, {
               method: 'POST',
               headers: {
@@ -299,7 +298,6 @@ const App: React.FC = () => {
               tool_use_id: data.tool_use_id,
               content: data.content,
             });
-            console.log(tool_result_content_items);
             
             break;
           case "tool_result":
