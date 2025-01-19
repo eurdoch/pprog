@@ -13,11 +13,16 @@ interface Text {
   text: string,
 }
 
+interface ToolInput {
+  statement?: string;  // For execute tool
+  [key: string]: any;  // For other potential tool inputs
+}
+
 interface ToolUse {
   type: "tool_use",
   id: string,
   name: string,
-  input: object,
+  input: ToolInput,
 }
 
 interface ToolResult {
@@ -380,7 +385,10 @@ const App: React.FC = () => {
                     key={`${index}-${contentIndex}`}
                     className="message tool-msg"
                   >
-                    {"Using tool: " + contentItem.name}
+                    { contentItem.name === "execute" ? 
+                      "Using tool execute\nStatement: " + contentItem.input.statement :
+                      "Using tool: " + contentItem.name
+                    }
                   </div>
                 default:
                   return null;
