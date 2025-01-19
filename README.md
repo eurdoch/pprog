@@ -83,6 +83,8 @@ compile_check - check for compilation errors, or for interpreted programs checks
 When messages go beyond the `max_context` config amount messages will be pruned automatically until total token count is below max.  When using Anthropic models, dedicated endpoint at `v1/messages/count_tokens` is used to get count.  For OpenAI/OpenAI-compatible models a conservative estimate of 2 characters / token is used to get count.  This is because different providers may use different tokenizers behind their OpenAI-compatible API.  The conversative estimate is also because most of the text will be code which has a lower character / token ratio on average.  As a general rule of thumb you should set your `max_context` to be around 70% of context length of model.  
 
 If errors occur while the chat is in a tool loop, all tool use and tool result messages following the user request will be pruned and a single empty assistant message will be added to maintain a valid conversation format.  The error will then be forwarded to user.  This is a quick hack and will probably change in the future, but is required by constraints of most APIs and how models are trained.  
+# priveleged commands
+The model may make tool calls using `execute` that require `sudo` priveleges.  When this happens, the tool loop will block and wait for user to input password.  The password prompt will appear in the terminal window where you run `pprog serve`.  Enter password and press ENTER.  This happens entirely on the local system where `pprog` was ran.  Your `sudo` password is never sent in any messages to the model.
 
 # officially supported models
 - Anthropic models: sonnet-3-5, haiku-3-5
