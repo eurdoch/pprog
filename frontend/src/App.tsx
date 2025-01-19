@@ -267,16 +267,19 @@ const App: React.FC = () => {
       }
 
       const data = await response.json();
+      console.log(data);
 
       setMessages(prev => [
         ...prev,
         data.message
       ]);
+      let tool_result_content_items: ToolResult[] = [];
       for (let contentItem of data.message.content) {
         switch(contentItem.type) {
           case "text":
             break;
           case "tool_use":
+            console.log('tool use case');
             const response = await fetch(`${window.SERVER_URL}/tools`, {
               method: 'POST',
               headers: {
@@ -292,26 +295,24 @@ const App: React.FC = () => {
             }
 
             const data = await response.json();
-            
-            await handleSendMessage({
-              role: "user",
-              content: [{
-                type: "tool_result",
-                tool_use_id: data.tool_use_id,
-                content: data.content
-              }],
+            tool_result_content_items.push({
+              type: "tool_result",
+              tool_use_id: data.tool_use_id,
+              content: data.content,
             });
+            console.log(tool_result_content_items);
+            
             break;
           case "tool_result":
-            await handleSendMessage({
-              role: "user",
-              content: [contentItem]
-            });
             break;
           default:
             break;
         }
       }
+      await handleSendMessage({
+        role: "user",
+        content: tool_result_content_items
+      });
     } catch (error: any) {
       console.error(error);
       alert(error);
