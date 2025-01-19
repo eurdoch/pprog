@@ -15,6 +15,8 @@ interface Text {
 
 interface ToolInput {
   statement?: string;  // For execute tool
+  path?: string;
+  content?: string;
   [key: string]: any;  // For other potential tool inputs
 }
 
@@ -385,11 +387,22 @@ const App: React.FC = () => {
                     key={`${index}-${contentIndex}`}
                     className="message tool-msg"
                   >
-                    { contentItem.name === "execute" ? 
-                      "Using tool execute\nStatement: " + contentItem.input.statement :
-                      "Using tool: " + contentItem.name
-                    }
+                    {(() => {
+                      switch(contentItem.name) {
+                        case "execute":
+                          return "Executing bash statement: " + contentItem.input.statement;
+                        case "write_file":
+                          return "Writing file " + contentItem.input.path;
+                        case "read_file":
+                          return "Reading file " + contentItem.input.path;
+                        case "compile_check":
+                          return "Running compile check";
+                        default:
+                          return "Using tool: " + contentItem.name;
+                      }
+                    })()}
                   </div>
+
                 default:
                   return null;
               }
