@@ -1,3 +1,8 @@
+## [0.0.7] - 2025-01-17
+### Changed
+- Updated frontend to handle multi-tool messages
+- Display more metadata on tool usage in chat
+
 ## [0.0.6] - 2025-01-17
 ### Added
 - Config variable to disable compile checks
