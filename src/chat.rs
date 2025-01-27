@@ -132,7 +132,6 @@ Tool use return content: {}
             self.prune_messages().await?;
         }
         
-        println!("{:#?}", self.messages.clone());
         let mut return_msg = self.send_messages().await?;
 
         // Check for plain text tool response in text content for deepseek R1
@@ -140,7 +139,6 @@ Tool use return content: {}
             for content_item in return_msg.content.clone() {
                 match content_item {
                     ContentItem::Text { text, .. } => {
-                        println!("Text {:#?}", text);
                         match Chat::extract_first_json(text.as_str()) {
                             Some(tool_use_json) => {
                                 // TODO handle error case of unwrapping values
@@ -150,7 +148,7 @@ Tool use return content: {}
                                     input: tool_use_json.get("inputs").unwrap().clone(),
                                 });
                             },
-                            None => println!("No tool found."),
+                            None => {},
                         }
                     },
                     _ => {},
