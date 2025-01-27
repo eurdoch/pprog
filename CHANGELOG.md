@@ -1,3 +1,7 @@
+## [0.0.8] - 2025-01-17
+### Added
+- Deepseek r1 support
+
 ## [0.0.7] - 2025-01-17
 ### Changed
 - Updated frontend to handle multi-tool messages

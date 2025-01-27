@@ -1,7 +1,7 @@
 # p(air) prog(rammer)
 pprog is an LLM based pair programmer for working on coding projects.  it can generate, edit and answer questions about your code.
 
-This is experimental and unstable code, it may change at any time.  It has solid support for Claude models through the Anthropic API, as well as OpenAI.  The program should work with any OpenAI compatible API by assigning corresponding api url in config.  Some examples of different configs can be found in `examples` directory.  The tooling logic is intended to be as simple as possible so the model has more flexibility to maneuver.  I am always open to suggestions.  I created this project for personal use because I didn't want to be locked in to a specific editor.
+This is experimental and unstable code, it may change at any time.  I created this project for personal use because I didn't want to be locked in to a specific editor.  More tools and feature will be added over time.
 
 ## prereqs
 - rust
@@ -50,16 +50,24 @@ api_key = "<OPENAI API KEY>"
 max_context = 100000
 max_output_tokens = 8096
 ```
-To run enter
+The tooling logic is intended to be as simple as possible so the model has more flexibility to maneuver.  To run enter
 ```
 pprog serve
 ```
-and then enter `http://localhost:8080` in your browser.  A chat interface will load and you can begin making changes to your code.  For example, in this example project you can type in a message like `Create an index.js file with basic express server` and it will create file and check that it runs properly by using `check_cmd` command.  Then another message like `Add GET /ping endpoint` and it will make changes to the code and check again.  You may also ask questions about the code.  
+and then enter `http://localhost:8080` in your browser.  A chat interface will load and you can begin making changes to your code.  For example, in this example project you can type in a message like `Create an index.js file with basic express server` and it will create file and check that it runs properly by using `check_cmd` command.  Then another message like `Add GET /ping endpoint` and it will make changes to the code and check again.
 
 You can run `pprog serve` for multiple projects at the same time by assigning different ports
 ```
 pprog serve --port 3002
 ```
+
+# officially supported models
+- Anthropic models: sonnet-3-5, haiku-3-5
+- OpenAI models: gpt-4, gpt-4o, gpt-4o-mini
+- Deepseek: v3, r1
+
+currently hacking together something to make o1 work.
+as people will probably ask llama models can be used through OpenAI-compatible APIs like Fireworks, but i've found even 405b to be utterly useless.
 
 # check command
 `pprog` uses the `check_cmd` to check compilation or successful operation.  In the example above `timeout 3s node index.js` will run to check for any runtime errors correct them until all errors are gone.  You're free to change `check_cmd` to anything you want for the given program.  For compiled projects using a langauge like Rust, `check_cmd` would be `"cargo check"`.  For intepreted languages it will depend on the type of program.  For long lived programs like a web server, you can use the timeout trick above (`gtimeout` on Macbooks) to check for any initial runtime errors.  For intepreted programs that are not long lived simply running the program (like `node short-lived-script.js`) should work.  Note that if not using a timeout for interpreted programs, the chat will not continue until the program completes.
@@ -85,14 +93,6 @@ When messages go beyond the `max_context` config amount messages will be pruned 
 If errors occur while the chat is in a tool loop, all tool use and tool result messages following the user request will be pruned and a single empty assistant message will be added to maintain a valid conversation format.  The error will then be forwarded to user.  This is a quick hack and will probably change in the future, but is required by constraints of most APIs and how models are trained.  
 # priveleged commands
 The model may make tool calls using `execute` that require `sudo` priveleges.  When this happens, the tool loop will block and wait for user to input password.  The password prompt will appear in the terminal window where you run `pprog serve`.  Enter password and press ENTER.  This happens entirely on the local system where `pprog` was ran.  Your `sudo` password is never sent in any messages to the model.
-
-# officially supported models
-- Anthropic models: sonnet-3-5, haiku-3-5
-- OpenAI models: gpt-4, gpt-4o, gpt-4o-mini
-- Deepseek: DeepSeek v3 (through OpenAI compatible API)
-
-o1 models are not currently supported due to API changes by OpenAI and lack of tools support, trying to hack a solution at the moment as i'd really like to try it.
-as people will probably ask llama models can be used through OpenAI-compatible APIs like Fireworks, but i've found even 405b to be utterly useless.
 
 # tips and warnings
 - The system prompt includes instructions to not change any files outside of the root of the project but this is not strictly guaranteed.  It has not gone outside the root of a project once, but if you prompt it to it possibly could.
