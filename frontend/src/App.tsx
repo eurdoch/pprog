@@ -77,6 +77,14 @@ function renderTextWithCodeBlocks(text: string) {
     if (typeof part === 'string') {
       return <React.Fragment key={index}>{part}</React.Fragment>;
     } else {
+      // Skip syntax highlighting for tool_use blocks
+      if (part.language === 'tool_use') {
+        return (
+          <pre key={index} className="code-block">
+            <code>{part.code}</code>
+          </pre>
+        );
+      }
       const highlightedCode = hljs.highlight(part.code, { 
         language: part.language 
       }).value;

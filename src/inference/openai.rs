@@ -265,75 +265,31 @@ impl Inference for OpenAIInference {
                 },
                 "deepseek-reasoner" => {
                     let mut deepseek_sys_msg = String::new();
-                    //deepseek_sys_msg.push_str(sys_msg);
-                    //let tools = self.tool_provider.get_tools_json().unwrap();
-                    let tools_system_msg = r#"
-                    You are a coding assistant working on a project.
+                    deepseek_sys_msg.push_str(sys_msg);
+                    let tools_string = self.tool_provider.get_tools_json().unwrap();
+                    let tools_system_msg = format!(r#"
+Tool definitions:
+{}
 
-Project file tree:
-.
-├── index.js
-└── package.json
+When tool is needed return as JSON in format 
+{{ 
+    "name": "function_name", 
+    "inputs": {{ 
+        "first_input_name": "first_input_value", 
+        "second_input_name", "second_input_value", 
+        ... 
+    }} 
+}} 
+surrounded by triple backticks.  
 
-Tools definitions:
-                {
-  "tool_type": "function",
-  "function": {
-    "name": "read_file",
-    "description": "Read file as string using path relative to root directory of project.",
-    "parameters": {
-      "schema_type": "object",
-      "properties": {
-        "path": {
-          "property_type": "string",
-          "description": "The file path relative to the project root directory"
-        }
-      },
-      "required": ["path"]
-    }
-  }
-}
-{
-  "tool_type": "function",
-  "function": {
-    "name": "write_file",
-    "description": "Write string to file at path relative to root directory of project.",
-    "parameters": {
-      "schema_type": "object",
-      "properties": {
-        "path": {
-          "property_type": "string",
-          "description": "The file path relative to the project root directory"
-        },
-        "content": {
-          "property_type": "string",
-          "description": "The content to write to the file"
-        }
-      },
-      "required": ["path", "content"]
-    }
-  }
-}
+For example if you were going to use a tool called 'read_file' the response would look like 
+```tool_use
+{{ "name": "read_file", "inputs": {{ "path": "index.js" }} }}
+```
 
-                The user will give you instructions on how to change the project code.
+Only use one tool at a time. Do not assume anything about contents of files, use read_file instead.
 
-                DO NOT run compile checks.
-                Never make any changes outside of the project's root directory.
-                Always read and write entire file contents.  Never write partial contents of a file.
-
-                When tool is needed return as JSON in format { 'name': 'function_name', 'inputs': { 'first_input_name': 'first_input_value', 'second_input_name', 'second_input_value', ... } } surrounded by triple backticks.  For example if you were going to use a tool called 'read_file' the response would look like 
-                ```json
-                { 'name': 'read_file', 'inputs': { 'path': 'index.js' } }
-                ```
-
-                Only use one tool at a time. Do not assume anything about contents of files, use read_file instead.
-
-                The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question.
-                    "#;
-                    //for tool in tools.as_array().unwrap() {
-                    //    tools_system_msg.push_str(tool.to_string().as_str());
-                    //    tools_system_msg.push_str("\n");
-                    //}
+The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question."#, tools_string.to_string());
                     deepseek_sys_msg.push_str(&tools_system_msg);
                     openai_messages.insert(0, OpenAIMessage {
                         role: Role::System,

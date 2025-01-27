@@ -139,7 +139,7 @@ Tool use return content: {}
             for content_item in return_msg.content.clone() {
                 match content_item {
                     ContentItem::Text { text, .. } => {
-                        match Chat::extract_first_json(text.as_str()) {
+                        match Chat::extract_tool_use(text.as_str()) {
                             Some(tool_use_json) => {
                                 // TODO handle error case of unwrapping values
                                 return_msg.content.push(ContentItem::ToolUse { 
@@ -254,8 +254,8 @@ The user may also questions about the code base.  If a user asks a question DO N
         self.messages.clear();
     }
 
-    fn extract_first_json(text: &str) -> Option<Value> {
-       text.split("```json\n")
+    fn extract_tool_use(text: &str) -> Option<Value> {
+       text.split("```tool_use\n")
            .nth(1)?
            .split("\n```")
            .next()
