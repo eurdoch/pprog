@@ -1,5 +1,6 @@
 use std::fmt;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::inference::{AnthropicInference, OpenAIInference};
 use crate::{config::ProjectConfig, tree::GitTree};
@@ -58,6 +59,7 @@ pub struct Chat {
     inference: Box<dyn Inference>,
     max_tokens: usize,
     check_enabled: bool,
+    model: String,
 }
 
 impl Chat {
@@ -74,6 +76,7 @@ impl Chat {
             inference,
             max_tokens: config.max_context,
             check_enabled: config.check_enabled,
+            model: config.model,
         }
     }
 
@@ -101,14 +104,60 @@ impl Chat {
     }
 
     pub async fn handle_message(&mut self, message: &CommonMessage) -> Result<CommonMessage, anyhow::Error> {
-        self.messages.push(message.clone());
+        if self.model.as_str() == "deepseek-reasoner" {
+            for content_item in message.content.clone() {
+                match content_item {
+                    ContentItem::ToolResult { tool_use_id, content } => {
+                        self.messages.push(CommonMessage {
+                            role: Role::User,
+                            content: vec![
+                                ContentItem::Text { 
+                                    text: format!(r#"
+Tool name: {}
+Tool use return content: {}
+                                    "#, tool_use_id, content)
+                                }
+                            ],
+                        });
+                    }
+                    _ => self.messages.push(message.clone()),
+                }
+            }
+        } else {
+            self.messages.push(message.clone());
+        }
         
         // After first message, check and prune if needed
         if self.messages.len() > 1 {
             self.prune_messages().await?;
         }
         
-        let return_msg = self.send_messages().await?;
+        println!("{:#?}", self.messages.clone());
+        let mut return_msg = self.send_messages().await?;
+
+        // Check for plain text tool response in text content for deepseek R1
+        if self.model.as_str() == "deepseek-reasoner" {
+            for content_item in return_msg.content.clone() {
+                match content_item {
+                    ContentItem::Text { text, .. } => {
+                        println!("Text {:#?}", text);
+                        match Chat::extract_first_json(text.as_str()) {
+                            Some(tool_use_json) => {
+                                // TODO handle error case of unwrapping values
+                                return_msg.content.push(ContentItem::ToolUse { 
+                                    id: tool_use_json.get("name").unwrap().as_str().unwrap().to_string(), 
+                                    name: tool_use_json.get("name").unwrap().as_str().unwrap().to_string(), 
+                                    input: tool_use_json.get("inputs").unwrap().clone(),
+                                });
+                            },
+                            None => println!("No tool found."),
+                        }
+                    },
+                    _ => {},
+                }
+            }
+        } 
+        
         self.messages.push(return_msg.clone());
         Ok(return_msg)
     }
@@ -116,40 +165,36 @@ impl Chat {
     fn get_system_message(&self) -> Result<String, anyhow::Error> {
         let tree_string = GitTree::get_tree()?;
         if self.check_enabled {
-            Ok(format!(
-                r#"
-                You are a coding assistant working on a project.
-                
-                File tree structure:
-                {}
+            Ok(format!(r#"
+You are a coding assistant working on a project.
 
-                The user will give you instructions on how to change the project code.
+File tree structure:
+{}
 
-                Always call 'compile_check' tool after completing changes that the user requests.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
+The user will give you instructions on how to change the project code.
 
-                Never make any changes outside of the project's root directory.
-                Always read and write entire file contents.  Never write partial contents of a file.
+Always call 'compile_check' tool after completing changes that the user requests.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
 
-                The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question.
-                "#,
+Never make any changes outside of the project's root directory.
+Always read and write entire file contents.  Never write partial contents of a file.
+
+The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question."#,
                 &tree_string,
             ))
         } else {
-            Ok(format!(
-                r#"
-                You are a coding assistant working on a project.
-                
-                File tree structure:
-                {}
+            Ok(format!(r#"
+You are a coding assistant working on a project.
 
-                The user will give you instructions on how to change the project code.
+File tree structure:
+{}
 
-                DO NOT run compile checks.
-                Never make any changes outside of the project's root directory.
-                Always read and write entire file contents.  Never write partial contents of a file.
+The user will give you instructions on how to change the project code.
 
-                The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question.
-                "#,
+DO NOT run compile checks.
+Never make any changes outside of the project's root directory.
+Always read and write entire file contents.  Never write partial contents of a file.
+
+The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question."#,
                 &tree_string
             ))
         }
@@ -163,6 +208,7 @@ impl Chat {
     }
 
     pub async fn send_messages(&mut self) -> Result<CommonMessage, anyhow::Error> {
+        // TODO this should handle nay changes to system message instead of inference struct
         let system_message = self.get_system_message()?;
         
         match self.inference.query_model(self.messages.clone(), Some(&system_message)).await {
@@ -208,5 +254,13 @@ impl Chat {
 
     pub fn clear(&mut self) {
         self.messages.clear();
+    }
+
+    fn extract_first_json(text: &str) -> Option<Value> {
+       text.split("```json\n")
+           .nth(1)?
+           .split("\n```")
+           .next()
+           .and_then(|json_str| serde_json::from_str(json_str).ok())
     }
 }

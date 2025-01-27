@@ -119,6 +119,7 @@ async fn chat_handler(
 ) -> impl Responder {
     let mut chat = data.chat.lock().unwrap();
 
+    println!("{:?}", &req.0.message);
     match chat.handle_message(&req.0.message).await {
         Ok(m) => HttpResponse::Ok().json(ChatResponse {
             message: m

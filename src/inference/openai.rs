@@ -232,14 +232,16 @@ impl Inference for OpenAIInference {
                         openai_message.content = Some(OpenAIContent::String(text));
                     },
                     ContentItem::ToolUse { id, name, input } => {
-                        openai_message.tool_calls = Some(vec![OpenAIToolCall {
-                            id,
-                            call_type: "function".to_string(),
-                            function: OpenAIFunctionCall {
-                                name,
-                                arguments: input.to_string(),
-                            }
-                        }]);
+                        if self.model.as_str() != "deepseek-reasoner" {
+                            openai_message.tool_calls = Some(vec![OpenAIToolCall {
+                                id,
+                                call_type: "function".to_string(),
+                                function: OpenAIFunctionCall {
+                                    name,
+                                    arguments: input.to_string(),
+                                }
+                            }]);
+                        }
                     },
                     ContentItem::ToolResult { tool_use_id, content } => {
                         openai_message.role = Role::Tool;
@@ -257,6 +259,85 @@ impl Inference for OpenAIInference {
                     openai_messages.insert(0, OpenAIMessage {
                         role: Role::Developer,
                         content: Some(OpenAIContent::String(sys_msg.to_string())),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    });
+                },
+                "deepseek-reasoner" => {
+                    let mut deepseek_sys_msg = String::new();
+                    //deepseek_sys_msg.push_str(sys_msg);
+                    //let tools = self.tool_provider.get_tools_json().unwrap();
+                    let tools_system_msg = r#"
+                    You are a coding assistant working on a project.
+
+Project file tree:
+.
+├── index.js
+└── package.json
+
+Tools definitions:
+                {
+  "tool_type": "function",
+  "function": {
+    "name": "read_file",
+    "description": "Read file as string using path relative to root directory of project.",
+    "parameters": {
+      "schema_type": "object",
+      "properties": {
+        "path": {
+          "property_type": "string",
+          "description": "The file path relative to the project root directory"
+        }
+      },
+      "required": ["path"]
+    }
+  }
+}
+{
+  "tool_type": "function",
+  "function": {
+    "name": "write_file",
+    "description": "Write string to file at path relative to root directory of project.",
+    "parameters": {
+      "schema_type": "object",
+      "properties": {
+        "path": {
+          "property_type": "string",
+          "description": "The file path relative to the project root directory"
+        },
+        "content": {
+          "property_type": "string",
+          "description": "The content to write to the file"
+        }
+      },
+      "required": ["path", "content"]
+    }
+  }
+}
+
+                The user will give you instructions on how to change the project code.
+
+                DO NOT run compile checks.
+                Never make any changes outside of the project's root directory.
+                Always read and write entire file contents.  Never write partial contents of a file.
+
+                When tool is needed return as JSON in format { 'name': 'function_name', 'inputs': { 'first_input_name': 'first_input_value', 'second_input_name', 'second_input_value', ... } } surrounded by triple backticks.  For example if you were going to use a tool called 'read_file' the response would look like 
+                ```json
+                { 'name': 'read_file', 'inputs': { 'path': 'index.js' } }
+                ```
+
+                Only use one tool at a time. Do not assume anything about contents of files, use read_file instead.
+
+                The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question.
+                    "#;
+                    //for tool in tools.as_array().unwrap() {
+                    //    tools_system_msg.push_str(tool.to_string().as_str());
+                    //    tools_system_msg.push_str("\n");
+                    //}
+                    deepseek_sys_msg.push_str(&tools_system_msg);
+                    openai_messages.insert(0, OpenAIMessage {
+                        role: Role::System,
+                        content: Some(OpenAIContent::String(deepseek_sys_msg)),
                         tool_calls: None,
                         tool_call_id: None,
                     });
@@ -281,6 +362,12 @@ impl Inference for OpenAIInference {
                 messages: openai_messages,
                 max_completion_tokens: Some(self.max_output_tokens),
                 tools,
+            }).unwrap(),
+            "deepseek-reasoner" => serde_json::to_value(LegacyOpenAIRequest {
+                model: self.model.clone(),
+                messages: openai_messages,
+                max_tokens: Some(self.max_output_tokens),
+                tools: None,
             }).unwrap(),
             _ => serde_json::to_value(LegacyOpenAIRequest {
                 model: self.model.clone(),
