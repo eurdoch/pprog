@@ -9,7 +9,13 @@ pub struct Tools;
 
 impl Tools {
     fn read_file(path: &str) -> Result<String> {
-        Ok(fs::read_to_string(path)?)
+        let contents = fs::read_to_string(path)?;
+        let lines = contents.lines().enumerate();
+        let result = lines
+            .map(|(i, line)| format!("{:>4}: {}", i + 1, line))
+            .collect::<Vec<_>>()
+            .join("\n");
+        Ok(result)
     }
 
     fn write_file(path: &str, content: &str) -> Result<()> {
