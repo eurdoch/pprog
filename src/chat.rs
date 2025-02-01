@@ -175,6 +175,7 @@ Always call 'compile_check' tool after completing changes that the user requests
 
 - Never make any changes outside of the project's root directory.
 - Always read and write entire file contents.  Do not write partial contents of files with other sections commented out.
+- DO NOT commit changes through git unless specified
 
 The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question."#,
                 &tree_string,
@@ -192,6 +193,7 @@ The user will give you instructions on how to change the project code.
 - Never make any changes outside of the project's root directory.
 - Always read and write entire file contents.  
 - DO NOT write partial contents of files with other sections commented out.
+- DO NOT commit changes through git unless specified
 
 The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question."#,
                 &tree_string
