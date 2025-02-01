@@ -85,6 +85,7 @@ impl Chat {
         
         while !self.messages.is_empty() {
             let token_count = self.inference.get_token_count(self.messages.clone(), Some(&system_message)).await?;
+            println!("Token Count: {:?}", &token_count);
             
             if token_count <= self.max_tokens as u64 {
                 break;
@@ -174,7 +175,8 @@ The user will give you instructions on how to change the project code.
 Always call 'compile_check' tool after completing changes that the user requests.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
 
 - Never make any changes outside of the project's root directory.
-- Always read and write entire file contents.  Do not write partial contents of files with other sections commented out.
+- Always read and write entire file contents.  Do not write partial contents of files with other sections commented out. Do not replace sections of code with comments like 
+    // Rest of the implementation remains the same...
 - DO NOT commit changes through git unless specified
 
 The user may also questions about the code base.  If a user asks a question DO NOT write to the files but instead read files to answer question."#,
