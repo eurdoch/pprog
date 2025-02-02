@@ -240,9 +240,29 @@ const App: React.FC = () => {
     setShowSettings(!showSettings);
   };
 
-  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedModel(e.target.value);
-    // Optionally, you could save this preference or send it to the backend
+  const handleModelChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newModel = e.target.value;
+    setSelectedModel(newModel);
+    
+    try {
+      const response = await fetch(`${window.SERVER_URL}/config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: newModel })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update model configuration');
+      }
+
+      // Optionally, handle successful configuration update
+      console.log('Model configuration updated successfully');
+    } catch (error) {
+      console.error('Error updating model configuration:', error);
+      // Optionally, show an error message to the user
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -510,9 +530,7 @@ const App: React.FC = () => {
       </div>
       {showSettings && (
         <div className="settings-modal">
-          <h3>Settings</h3>
           <div className="settings-section">
-            <label htmlFor="model-select">Language Model:</label>
             <select 
               id="model-select" 
               value={selectedModel} 

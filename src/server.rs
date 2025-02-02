@@ -24,6 +24,11 @@ pub struct ToolRequest {
     input: Value,
 }
 
+#[derive(Deserialize)]
+pub struct ConfigRequest {
+    model: String,
+}
+
 #[derive(Serialize, Clone)]
 pub struct ChatResponse {
     message: CommonMessage,
@@ -74,6 +79,18 @@ async fn clear_chat(data: web::Data<AppState>) -> impl Responder {
     let mut chat = data.chat.lock().unwrap();
     chat.clear();
     HttpResponse::Ok().json(json!({"cleared": true, "message": "Chat history cleared"}))
+}
+
+async fn config_handler(
+    data: web::Data<AppState>, 
+    req: web::Json<ConfigRequest>
+) -> impl Responder {
+    let mut chat = data.chat.lock().unwrap();
+    let acknowledged = chat.update_config(&req.0.model);
+    match acknowledged {
+        true => HttpResponse::Ok().json(json!({"acknowledged": true})),
+        false => HttpResponse::Ok().json(json!({"acknowledged": false})),
+    }
 }
 
 #[get("/diff")]
@@ -216,6 +233,7 @@ pub async fn start_server(host: String, port: u16) -> std::io::Result<()> {
             .app_data(app_state.clone())
             .route("/chat", web::post().to(chat_handler))
             .route("/tools", web::post().to(tool_handler))
+            .route("/config", web::post().to(config_handler)) // Add this line
             .service(clear_chat)
             .service(get_messages)
             .service(get_diff)
@@ -262,4 +280,3 @@ async fn index(
 
     HttpResponse::NotFound().body(format!("File not found: {}", path))
 }
-

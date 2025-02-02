@@ -66,9 +66,30 @@ impl Chat {
     pub fn new() -> Self {
         let config = ProjectConfig::load().unwrap_or_default();
         let inference: Box<dyn Inference> = match config.provider.as_str() {
-            "anthropic" => Box::new(AnthropicInference::new()),
-            "openai" => Box::new(OpenAIInference::new()),
-            _ => Box::new(AnthropicInference::new()),
+            "anthropic" => Box::new(
+                AnthropicInference::new(
+                    config.model.clone(),
+                    config.api_url,
+                    config.api_key,
+                    config.max_output_tokens,
+                )
+            ),
+            "openai" => Box::new(
+                OpenAIInference::new(
+                    config.model.clone(),
+                    config.api_url,
+                    config.api_key,
+                    config.max_output_tokens,
+                )
+            ),
+            _ => Box::new(
+                AnthropicInference::new(
+                    config.model.clone(),
+                    config.api_url,
+                    config.api_key,
+                    config.max_output_tokens,
+                )
+            ),
         };
 
         Self {
@@ -77,6 +98,45 @@ impl Chat {
             max_tokens: config.max_context,
             check_enabled: config.check_enabled,
             model: config.model,
+        }
+    }
+
+    pub fn update_config(&mut self, model: &str) -> bool {
+        if self.model.as_str() == model {
+            return true
+        }
+        match model {
+            "gpt-4o" => {
+                let api_key = std::env::var("OPENAI_API_KEY")
+                    .expect("OPENAI_API_KEY environment variable not set");
+                self.inference = Box::new(
+                    OpenAIInference::new(
+                        model.to_string(),
+                        "https://api.openai.com/v1/chat/completions".to_string(),
+                        api_key,
+                        8096
+                    )
+                );
+                self.model = model.to_string();
+                true
+            },
+            "claude-3-5-sonnet-latest" | "claude-3-5-haiku-latest" => {
+                let api_key = std::env::var("ANTHROPIC_API_KEY")
+                    .expect("OPENAI_API_KEY environment variable not set");
+                self.inference = Box::new(
+                    AnthropicInference::new(
+                        model.to_string(),
+                        "https://api.anthropic.com/v1/messages".to_string(),
+                        api_key,
+                        8096
+                    )
+                );
+                self.model = model.to_string();
+                true
+            },
+            _ => {
+                false
+            }
         }
     }
 

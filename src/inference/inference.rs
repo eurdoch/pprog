@@ -6,7 +6,12 @@ use super::types::{InferenceError, ModelResponse};
 
 #[async_trait]
 pub trait Inference: Send + Sync {
-    fn new() -> Self where Self: Sized;
+    fn new(
+        model: String,
+        api_url: String,
+        api_key: String,
+        max_output_tokens: u32
+    ) -> Self where Self: Sized;
     
     async fn query_model(
         &self, 

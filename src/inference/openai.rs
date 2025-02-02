@@ -5,7 +5,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::chat::{CommonMessage, ContentItem, Role};
-use crate::config::ProjectConfig;
 use super::types::{InferenceError, ModelResponse};
 use super::tools::{OpenAITool, OpenAIToolFunction, InputSchema, PropertySchema};
 use super::inference::Inference;
@@ -197,26 +196,24 @@ pub struct OpenAIInference {
     tool_provider: OpenAIToolProvider,
 }
 
-impl std::default::Default for OpenAIInference {
-    fn default() -> Self {
-        let config = ProjectConfig::load().unwrap_or_default();
-        
+#[async_trait]
+impl Inference for OpenAIInference {
+    fn new(
+       model: String,
+       api_url: String,
+       api_key: String,
+       max_output_tokens: u32
+    ) -> Self {
         OpenAIInference {
-            model: config.model,
+            model,
             client: Client::new(),
-            api_url: config.api_url,
-            api_key: config.api_key,
-            max_output_tokens: config.max_output_tokens,
+            api_url,
+            api_key,
+            max_output_tokens,
             tool_provider: OpenAIToolProvider::new(),
         }
     }
-}
 
-#[async_trait]
-impl Inference for OpenAIInference {
-    fn new() -> Self {
-        Self::default()
-    }
 
     async fn query_model(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
         let mut openai_messages: Vec<OpenAIMessage> = messages.into_iter().map(|msg| {

@@ -5,7 +5,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::chat::{CommonMessage, ContentItem};
-use crate::config::ProjectConfig;
 use super::inference::Inference;
 use super::types::{InferenceError, ModelResponse};
 use super::tools::{AnthropicTool, InputSchema, PropertySchema};
@@ -168,28 +167,22 @@ pub struct AnthropicInference {
     tools: AnthropicTools,
 }
 
-impl std::default::Default for AnthropicInference {
-    fn default() -> Self {
-        let config = match ProjectConfig::load() {
-            Ok(config) => config,
-            Err(_) => ProjectConfig::default(),
-        };
-        
-        AnthropicInference {
-            model: config.model,
-            client: Client::new(),
-            api_url: config.api_url,
-            api_key: config.api_key,
-            max_output_tokens: config.max_output_tokens,
-            tools: AnthropicTools::new(),
-        }
-    }
-}
-
 #[async_trait]
 impl Inference for AnthropicInference {
-    fn new() -> Self {
-        Self::default()
+    fn new(
+        model: String,
+        api_url: String,
+        api_key: String,
+        max_output_tokens: u32
+    ) -> Self {
+        AnthropicInference {
+            model,
+            client: Client::new(),
+            api_url,
+            api_key,
+            max_output_tokens,
+            tools: AnthropicTools::new(),
+        }
     }
 
     async fn query_model(&self, messages: Vec<CommonMessage>, system_message: Option<&str>) -> Result<ModelResponse, InferenceError> {
