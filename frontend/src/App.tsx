@@ -49,12 +49,9 @@ interface FileChange {
 
 // Language Model options
 const LANGUAGE_MODELS = [
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-  { value: 'gpt-4', label: 'GPT-4' },
-  { value: 'claude-2', label: 'Claude 2' },
-  { value: 'claude-instant-1', label: 'Claude Instant' },
-  { value: 'mistral-7b', label: 'Mistral 7B' },
-  { value: 'llama-2-70b', label: 'Llama 2 70B' }
+  { value: 'gpt-4o', label: 'gpt-4o' },
+  { value: 'claude-3-5-sonnet-latest', label: 'claude-3-5-sonnet-latest' },
+  { value: 'claude-3-5-haiku-latest', label: 'claude-3-5-haiku-latest' },
 ];
 
 function renderTextWithCodeBlocks(text: string) {
