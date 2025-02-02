@@ -253,7 +253,7 @@ The user will give you instructions on how to change the project code.
 Always call 'compile_check' tool after completing changes that the user requests.  If compile_check shows any errors, make subsequent calls to correct the errors. Continue checking and rewriting until there are no more errors.  If there are warnings then do not try to fix them, just let the user know.  If any bash commands are needed like installing packages use tool 'execute'.
 
 - Never make any changes outside of the project's root directory.
-- Always read and write entire file contents.  Do not write partial contents of files with other sections commented out. Do not replace sections of code with comments like // Rest of the implementation remains the same...
+- DO NOT truncate code with comments
 - DO NOT commit changes through git unless specified
 - DO NOT run compile checks
 
