@@ -47,6 +47,16 @@ interface FileChange {
   }[];
 }
 
+// Language Model options
+const LANGUAGE_MODELS = [
+  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+  { value: 'gpt-4', label: 'GPT-4' },
+  { value: 'claude-2', label: 'Claude 2' },
+  { value: 'claude-instant-1', label: 'Claude Instant' },
+  { value: 'mistral-7b', label: 'Mistral 7B' },
+  { value: 'llama-2-70b', label: 'Llama 2 70B' }
+];
+
 function renderTextWithCodeBlocks(text: string) {
   const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
   const parts: (string | { language: string; code: string })[] = [];
@@ -151,6 +161,7 @@ const App: React.FC = () => {
   const [recursiveCallCount, setRecursiveCallCount] = useState(0);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(LANGUAGE_MODELS[0].value);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -232,6 +243,11 @@ const App: React.FC = () => {
     setShowSettings(!showSettings);
   };
 
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedModel(e.target.value);
+    // Optionally, you could save this preference or send it to the backend
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -277,7 +293,10 @@ const App: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: message })
+        body: JSON.stringify({ 
+          message: message, 
+          model: selectedModel 
+        })
       });
 
       if (!response.ok) {
@@ -494,13 +513,21 @@ const App: React.FC = () => {
       </div>
       {showSettings && (
         <div className="settings-modal">
-          {/* Add settings content here */}
           <h3>Settings</h3>
-          {/* Example placeholder settings */}
-          <div>
-            <label>
-              <input type="checkbox" /> Some Setting Option
-            </label>
+          <div className="settings-section">
+            <label htmlFor="model-select">Language Model:</label>
+            <select 
+              id="model-select" 
+              value={selectedModel} 
+              onChange={handleModelChange}
+              className="model-dropdown"
+            >
+              {LANGUAGE_MODELS.map((model) => (
+                <option key={model.value} value={model.value}>
+                  {model.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       )}
