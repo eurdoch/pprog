@@ -150,6 +150,7 @@ const App: React.FC = () => {
   const [diffFiles, setDiffFiles] = useState<FileChange[]>([]);
   const [recursiveCallCount, setRecursiveCallCount] = useState(0);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -225,6 +226,10 @@ const App: React.FC = () => {
 
   const handleModalClose = () => {
     setShowModal(false);
+  };
+
+  const toggleSettings = () => {
+    setShowSettings(!showSettings);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -479,7 +484,26 @@ const App: React.FC = () => {
         >
           Clear Chat
         </button>
+        <button 
+          className={`settings-button ${showSettings ? 'active' : ''}`}
+          onClick={toggleSettings}
+          title="Settings"
+        >
+          ⚙️
+        </button>
       </div>
+      {showSettings && (
+        <div className="settings-modal">
+          {/* Add settings content here */}
+          <h3>Settings</h3>
+          {/* Example placeholder settings */}
+          <div>
+            <label>
+              <input type="checkbox" /> Some Setting Option
+            </label>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
