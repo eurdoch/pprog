@@ -1,3 +1,7 @@
+## [0.0.9] - 2025-01-17
+### Added
+- Change models mid conversation
+
 ## [0.0.8] - 2025-01-17
 ### Added
 - Deepseek r1 support
