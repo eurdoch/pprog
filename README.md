@@ -36,7 +36,7 @@ check_cmd = "timeout 3s node index.js"
 check_enabled = false
 api_url = "https://api.anthropic.com/v1/messages"
 api_key = "<ANTHROPIC API KEY>"
-max_context = 128000
+max_context = 140000
 max_output_tokens = 8096
 ```
 An Anthropic account is assumed on init, but OpenAI-compatible APIs can be used as well.  For example, to use OpenAI you can change config to 
